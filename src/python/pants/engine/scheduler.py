@@ -15,7 +15,8 @@ from pants.base.project_tree import Dir, File, Link
 from pants.build_graph.address import Address
 from pants.engine.addressable import SubclassesOf
 from pants.engine.fs import FileContent, FilesContent, Path, PathGlobs, Snapshot
-from pants.engine.isolated_process import _Snapshots, create_snapshot_rules
+from pants.engine.isolated_process import (ExecuteProcessRequest, ExecuteProcessResult, _Snapshots,
+                                           create_snapshot_rules)
 from pants.engine.native import Function, TypeConstraint, TypeId
 from pants.engine.nodes import Return, State, Throw
 from pants.engine.rules import RuleIndex, SingletonRule, TaskRule
@@ -97,6 +98,7 @@ class WrappedNativeScheduler(object):
       Dir,
       File,
       Link,
+      ExecuteProcessResult,
       has_products_constraint,
       constraint_for(Address),
       constraint_for(Variants),
@@ -107,6 +109,8 @@ class WrappedNativeScheduler(object):
       constraint_for(Dir),
       constraint_for(File),
       constraint_for(Link),
+      constraint_for(ExecuteProcessRequest),
+      constraint_for(ExecuteProcessResult),
     )
 
   def _root_type_ids(self):
@@ -308,7 +312,8 @@ class LocalScheduler(object):
            particular (possibly synthetic) product.
     :param rules: A set of Rules which is used to compute values in the product graph.
     :param project_tree: An instance of ProjectTree for the current build root.
-    :param work_dir: The pants work dir.
+    :param work_dir: The pants work dir - a temporary directory in which the scheduler can place
+           internal files.
     :param native: An instance of engine.native.Native.
     :param include_trace_on_error: Include the trace through the graph upon encountering errors.
     :type include_trace_on_error: bool
@@ -472,7 +477,7 @@ class LocalScheduler(object):
     if throw_root_states:
       if self._include_trace_on_error:
         cumulative_trace = '\n'.join(self.trace(request))
-        raise ExecutionError('Received unexpected Throw state(s):\n{}'.format(cumulative_trace))
+        raise ExecutionError('Received unexpected Throw state(s): {}\n:\n{}'.format(throw_root_states, cumulative_trace))
 
       if len(throw_root_states) == 1:
         raise throw_root_states[0].exc

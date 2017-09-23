@@ -61,6 +61,7 @@ class SchedulerTestBase(object):
                           include_trace_on_error=include_trace_on_error)
 
   def execute(self, scheduler, product, *subjects):
+    print("test execute")
     """Runs an ExecutionRequest for the given product and subjects, and returns the result value."""
     request = scheduler.execution_request([product], subjects)
     result = scheduler.execute(request)
