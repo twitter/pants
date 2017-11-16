@@ -1,12 +1,8 @@
 // Copyright 2017 Pants project contributors (see CONTRIBUTORS.md).
 // Licensed under the Apache License, Version 2.0 (see LICENSE).
 
-use digest::{Digest, FixedOutput};
-use sha2::Sha256;
-
 use std::error::Error;
 use std::fmt;
-use std::io::{self, Write};
 
 use hex;
 
@@ -63,43 +59,6 @@ impl fmt::Debug for Fingerprint {
 impl AsRef<[u8]> for Fingerprint {
   fn as_ref(&self) -> &[u8] {
     &self.0[..]
-  }
-}
-
-///
-/// A Write instance that fingerprints all data that passes through it.
-///
-pub struct WriterHasher<W: Write> {
-  hasher: Sha256,
-  inner: W,
-}
-
-impl<W: Write> WriterHasher<W> {
-  pub fn new(inner: W) -> WriterHasher<W> {
-    WriterHasher {
-      hasher: Sha256::default(),
-      inner: inner,
-    }
-  }
-
-  ///
-  /// Returns the result of fingerprinting this stream, and Drops the stream.
-  ///
-  pub fn finish(self) -> Fingerprint {
-    Fingerprint::from_bytes_unsafe(&self.hasher.fixed_result())
-  }
-}
-
-impl<W: Write> Write for WriterHasher<W> {
-  fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-    let written = self.inner.write(buf)?;
-    // Hash the bytes that were successfully written.
-    self.hasher.input(&buf[0..written]);
-    Ok(written)
-  }
-
-  fn flush(&mut self) -> io::Result<()> {
-    self.inner.flush()
   }
 }
 

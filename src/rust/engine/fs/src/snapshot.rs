@@ -3,23 +3,21 @@
 
 use bazel_protos;
 use boxfuture::{Boxable, BoxFuture};
+use futures;
 use futures::Future;
 use futures::future::join_all;
 use itertools::Itertools;
-use {Digest, File, PathStat, Store};
+use {Digest, File, FileContent, PathStat, Store};
 use hash::Fingerprint;
 use protobuf;
 use std::ffi::OsString;
 use std::fmt;
+use std::path::PathBuf;
 use std::sync::Arc;
 
 #[derive(Clone, PartialEq)]
 pub struct Snapshot {
-  // TODO: In a follow-up commit, fingerprint will be removed, and digest will be made non-optional.
-  // They both exist right now as a compatibility shim so that the tar-based code and
-  // Directory-based code can peacefully co-exist.
-  pub fingerprint: Fingerprint,
-  pub digest: Option<Digest>,
+  pub digest: Digest,
   pub path_stats: Vec<PathStat>,
 }
 
@@ -96,7 +94,7 @@ impl Snapshot {
           ).and_then(move |snapshot| {
             let mut dir_node = bazel_protos::remote_execution::DirectoryNode::new();
             dir_node.set_name(osstring_as_utf8(first_component)?);
-            dir_node.set_digest(snapshot.digest.unwrap().into());
+            dir_node.set_digest(snapshot.digest.into());
             Ok(dir_node)
           })
             .to_boxed(),
@@ -111,13 +109,61 @@ impl Snapshot {
         directory.set_files(protobuf::RepeatedField::from_vec(files));
         store.record_directory(&directory).map(move |digest| {
           Snapshot {
-            fingerprint: digest.0,
-            digest: Some(digest),
+            digest: digest,
             path_stats: path_stats,
           }
         })
       })
       .to_boxed()
+  }
+
+  // TODO: Rewrite this to execute in parallel
+  pub fn contents(self, store: Arc<Store>) -> BoxFuture<Vec<FileContent>, String> {
+    futures::future::done(Snapshot::contents_for_directory_sync(
+      self.digest.0,
+      store,
+      PathBuf::from(""),
+    )).to_boxed()
+  }
+
+  fn contents_for_directory_sync(
+    fingerprint: Fingerprint,
+    store: Arc<Store>,
+    path_so_far: PathBuf,
+  ) -> Result<Vec<FileContent>, String> {
+    let directory = store
+      .load_directory_proto(fingerprint)
+      .wait()
+      .unwrap()
+      .ok_or_else(|| format!("Could not find snapshot {}", fingerprint))?;
+
+    let mut contents = Vec::new();
+
+    for file_node in directory.get_files() {
+      contents.push(FileContent {
+        path: path_so_far.join(file_node.get_name()),
+        content: store
+          .load_file_bytes(
+            Fingerprint::from_hex_string(file_node.get_digest().get_hash()).unwrap(),
+          )
+          .wait()
+          .unwrap()
+          .unwrap(),
+      });
+    }
+
+    for dir_node in directory.get_directories() {
+      contents.extend(
+        Snapshot::contents_for_directory_sync(
+          Fingerprint::from_hex_string(dir_node.get_digest().get_hash()).unwrap(),
+          store.clone(),
+          path_so_far.join(dir_node.get_name()),
+        ).unwrap(),
+      );
+    }
+
+    contents.sort_by(|a, b| a.path.cmp(&b.path));
+    Ok(contents)
   }
 }
 
@@ -125,8 +171,7 @@ impl fmt::Debug for Snapshot {
   fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
     write!(
       f,
-      "Snapshot({}, digest={:?}, entries={})",
-      self.fingerprint.to_hex(),
+      "Snapshot(digest={:?}, entries={})",
       self.digest,
       self.path_stats.len()
     )
@@ -204,17 +249,17 @@ mod tests {
     make_file(&dir.path().join(&file_name), STR.as_bytes(), 0o600);
 
     let path_stats = expand_all_sorted(posix_fs);
-    // TODO: Inline when only used once
-    let fingerprint = Fingerprint::from_hex_string(
-      "63949aa823baf765eff07b946050d76ec0033144c785a94d3ebd82baa931cd16",
-    ).unwrap();
     assert_eq!(
       Snapshot::from_path_stats(store, digester, path_stats.clone())
         .wait()
         .unwrap(),
       Snapshot {
-        fingerprint: fingerprint,
-        digest: Some(Digest(fingerprint, 80)),
+        digest: Digest(
+          Fingerprint::from_hex_string(
+            "63949aa823baf765eff07b946050d76ec0033144c785a94d3ebd82baa931cd16",
+          ).unwrap(),
+          80,
+        ),
         path_stats: path_stats,
       }
     );
@@ -230,17 +275,17 @@ mod tests {
     make_file(&dir.path().join(&roland), STR.as_bytes(), 0o600);
 
     let path_stats = expand_all_sorted(posix_fs);
-    // TODO: Inline when only used once
-    let fingerprint = Fingerprint::from_hex_string(
-      "8b1a7ea04eaa2527b35683edac088bc826117b53b7ec6601740b55e20bce3deb",
-    ).unwrap();
     assert_eq!(
       Snapshot::from_path_stats(store, digester, path_stats.clone())
         .wait()
         .unwrap(),
       Snapshot {
-        fingerprint: fingerprint,
-        digest: Some(Digest(fingerprint, 78)),
+        digest: Digest(
+          Fingerprint::from_hex_string(
+            "8b1a7ea04eaa2527b35683edac088bc826117b53b7ec6601740b55e20bce3deb",
+          ).unwrap(),
+          78,
+        ),
         path_stats: path_stats,
       }
     );
@@ -262,20 +307,42 @@ mod tests {
     let sorted_path_stats = expand_all_sorted(posix_fs);
     let mut unsorted_path_stats = sorted_path_stats.clone();
     unsorted_path_stats.reverse();
-    // TODO: Inline when only used once
-    let fingerprint = Fingerprint::from_hex_string(
-      "fbff703bdaac62accf2ea5083bcfed89292073bf710ef9ad14d9298c637e777b",
-    ).unwrap();
     assert_eq!(
       Snapshot::from_path_stats(store, digester, unsorted_path_stats)
         .wait()
         .unwrap(),
       Snapshot {
-        fingerprint: fingerprint,
-        digest: Some(Digest(fingerprint, 232)),
+        digest: Digest(
+          Fingerprint::from_hex_string(
+            "fbff703bdaac62accf2ea5083bcfed89292073bf710ef9ad14d9298c637e777b",
+          ).unwrap(),
+          232,
+        ),
         path_stats: sorted_path_stats,
       }
     );
+  }
+
+  // TODO: Write more tests which involve multiple files, and directories, and stuff.
+  // I will do this before merging this PR, but want to check the approach before doing so.
+  #[test]
+  fn contents_for_one_file() {
+    let (store, dir, posix_fs, digester) = setup();
+
+    let file_name = PathBuf::from("roland");
+    make_file(&dir.path().join(&file_name), STR.as_bytes(), 0o600);
+
+    let path_stats = expand_all_sorted(posix_fs);
+    let contents = Snapshot::from_path_stats(store.clone(), digester, path_stats.clone())
+      .wait()
+      .unwrap()
+      .contents(store)
+      .wait()
+      .unwrap();
+    // TODO: Write helper for asserting equality of FileContents (and Vecs thereof).
+    assert_eq!(contents.len(), 1);
+    assert_eq!(contents.get(0).unwrap().path, file_name);
+    assert_eq!(contents.get(0).unwrap().content, STR.as_bytes().to_vec());
   }
 
   struct FileSaver(Arc<Store>, Arc<PosixFS>);
