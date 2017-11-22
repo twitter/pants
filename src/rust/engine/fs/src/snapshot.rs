@@ -34,12 +34,22 @@ impl Snapshot {
     file_digester: GFD,
     mut path_stats: Vec<PathStat>,
   ) -> BoxFuture<Snapshot, String> {
+    path_stats.sort_by(|a, b| a.path().cmp(b.path()));
+    Snapshot::from_sorted_path_stats(store, file_digester, path_stats)
+  }
+
+  fn from_sorted_path_stats<
+    GFD: GetFileDigest<Error> + Sized + Clone,
+    Error: fmt::Debug + 'static + Send,
+  >(
+    store: Arc<Store>,
+    file_digester: GFD,
+    path_stats: Vec<PathStat>,
+  ) -> BoxFuture<Snapshot, String> {
     let mut file_futures: Vec<BoxFuture<bazel_protos::remote_execution::FileNode, String>> =
       Vec::new();
     let mut dir_futures: Vec<BoxFuture<bazel_protos::remote_execution::DirectoryNode, String>> =
       Vec::new();
-
-    path_stats.sort_by(|a, b| a.path().cmp(b.path()));
 
     for (first_component, group) in
       &path_stats.iter().cloned().group_by(|s| {
@@ -90,7 +100,7 @@ impl Snapshot {
       } else {
         dir_futures.push(
           // TODO: Memoize this in the graph
-          Snapshot::from_path_stats(
+          Snapshot::from_sorted_path_stats(
             store.clone(),
             file_digester.clone(),
             paths_of_child_dir(path_group),
