@@ -862,39 +862,17 @@ pub struct Snapshot {
 
 impl Snapshot {
   fn create(context: Context, path_globs: PathGlobs) -> NodeFuture<fs::Snapshot> {
-    // Recursively expand PathGlobs into PathStats while tracking their dependencies.
+    // Recursively expand PathGlobs into PathStats.
+    // We rely on Context::expand tracking dependencies for scandirs,
+    // and fs::Snapshot::from_path_stats tracking dependencies for file digests.
     context
       .expand(path_globs)
-      .then(move |path_stats_res| match path_stats_res {
-        Ok(path_stats) => {
-          // Declare dependencies on the relevant Stats, and then create a Snapshot.
-          let stats = future::join_all(
-            path_stats
-              .iter()
-              .map(
-                |path_stat| context.get(Stat(path_stat.path().to_owned())), // for recording only
-              )
-              .collect::<Vec<_>>(),
-          );
-          // And then create a Snapshot.
-          stats
-            .and_then(move |_| {
-              let context = context.clone();
-              let pool = context.core.pool.clone();
-              pool
-                .spawn_fn(move || {
-                  fs::Snapshot::from_path_stats(
-                    context.core.store.clone(),
-                    context.clone(),
-                    path_stats,
-                  )
-                })
-                .map_err(move |e| throw(&format!("Snapshot failed: {}", e)))
-            })
-            .to_boxed()
-        }
-        Err(e) => err(throw(&format!("PathGlobs expansion failed: {:?}", e))),
+      .map_err(|e| format!("PlatGlobs expansion failed: {:?}", e))
+      .and_then(move |path_stats| {
+        fs::Snapshot::from_path_stats(context.core.store.clone(), context.clone(), path_stats)
+          .map_err(move |e| format!("Snapshot failed: {}", e))
       })
+      .map_err(|e| throw(&e))
       .to_boxed()
   }
 
@@ -1140,10 +1118,18 @@ impl NodeKey {
   ///
   pub fn fs_subject(&self) -> Option<&Path> {
     match self {
+      &NodeKey::DigestFile(ref s) => Some(s.0.path.as_path()),
       &NodeKey::ReadLink(ref s) => Some((s.0).0.as_path()),
       &NodeKey::Scandir(ref s) => Some((s.0).0.as_path()),
       &NodeKey::Stat(ref s) => Some(s.0.as_path()),
-      _ => None,
+
+      // Not FS operations:
+      // Explicitly listed so that if people add new NodeKeys they need to consider whether their
+      // NodeKey represents an FS operation, and accordingly whether they need to add it to the
+      // above list or the below list.
+      &NodeKey::Select { .. } |
+      &NodeKey::Snapshot { .. } |
+      &NodeKey::Task { .. } => None,
     }
   }
 }
