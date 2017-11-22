@@ -6,7 +6,6 @@ use std::error::Error;
 use std::fmt;
 use std::os::unix::ffi::OsStrExt;
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
 
 use futures::future::{self, Future};
 use ordermap::OrderMap;
@@ -862,7 +861,7 @@ pub struct Snapshot {
 }
 
 impl Snapshot {
-  fn create(context: Arc<Context>, path_globs: PathGlobs) -> NodeFuture<fs::Snapshot> {
+  fn create(context: Context, path_globs: PathGlobs) -> NodeFuture<fs::Snapshot> {
     // Recursively expand PathGlobs into PathStats while tracking their dependencies.
     context
       .expand(path_globs)
@@ -994,7 +993,7 @@ impl Node for Snapshot {
       .then(move |path_globs_res| match path_globs_res {
         Ok(path_globs_val) => {
           match Self::lift_path_globs(&path_globs_val) {
-            Ok(pgs) => Snapshot::create(Arc::new(context), pgs),
+            Ok(pgs) => Snapshot::create(context, pgs),
             Err(e) => err(throw(&format!("Failed to parse PathGlobs: {}", e))),
           }
         }

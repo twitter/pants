@@ -26,9 +26,12 @@ pub trait GetFileDigest<Error> {
 }
 
 impl Snapshot {
-  pub fn from_path_stats<GFD: GetFileDigest<Error> + Sized, Error: fmt::Debug + 'static + Send>(
+  pub fn from_path_stats<
+    GFD: GetFileDigest<Error> + Sized + Clone,
+    Error: fmt::Debug + 'static + Send,
+  >(
     store: Arc<Store>,
-    file_digester: Arc<GFD>,
+    file_digester: GFD,
     mut path_stats: Vec<PathStat>,
   ) -> BoxFuture<Snapshot, String> {
     let mut file_futures: Vec<BoxFuture<bazel_protos::remote_execution::FileNode, String>> =
@@ -229,7 +232,7 @@ mod tests {
 
   const STR: &str = "European Burmese";
 
-  fn setup() -> (Arc<Store>, TempDir, Arc<PosixFS>, Arc<FileSaver>) {
+  fn setup() -> (Arc<Store>, TempDir, Arc<PosixFS>, FileSaver) {
     let pool = Arc::new(ResettablePool::new("test-pool-".to_string()));
     // TODO: Pass a remote CAS address through.
     let store = Arc::new(
@@ -237,7 +240,7 @@ mod tests {
     );
     let dir = TempDir::new("root").unwrap();
     let posix_fs = Arc::new(PosixFS::new(dir.path(), pool, vec![]).unwrap());
-    let digester = Arc::new(FileSaver(store.clone(), posix_fs.clone()));
+    let digester = FileSaver(store.clone(), posix_fs.clone());
     (store, dir, posix_fs, digester)
   }
 
@@ -345,6 +348,7 @@ mod tests {
     assert_eq!(contents.get(0).unwrap().content, STR.as_bytes().to_vec());
   }
 
+  #[derive(Clone)]
   struct FileSaver(Arc<Store>, Arc<PosixFS>);
 
   impl GetFileDigest<String> for FileSaver {
