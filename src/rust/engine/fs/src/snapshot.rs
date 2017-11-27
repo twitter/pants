@@ -3,7 +3,6 @@
 
 use bazel_protos;
 use boxfuture::{Boxable, BoxFuture};
-use futures;
 use futures::Future;
 use futures::future::join_all;
 use itertools::Itertools;
@@ -160,11 +159,15 @@ impl Snapshot {
             .iter()
             .map(|file_node| {
               let path = path_so_far.join(file_node.get_name());
-              let maybe_bytes =
-                store.load_file_bytes(
+              store
+                .load_file_bytes(
                   Fingerprint::from_hex_string(file_node.get_digest().get_hash()).unwrap(),
-                );
-              futures::future::ok(path).join(maybe_bytes)
+                )
+                .and_then(|maybe_bytes| {
+                  maybe_bytes
+                    .ok_or_else(|| format!("Couldn't find file contents for {:?}", path))
+                    .map(|content| FileContent { path, content })
+                })
             })
             .collect::<Vec<_>>(),
         );
@@ -183,21 +186,6 @@ impl Snapshot {
         );
         file_futures.join(dir_futures)
       })
-      .and_then(
-        move |(paths_and_maybe_byteses, dirs): (Vec<(PathBuf, Option<Vec<u8>>)>,
-                                                Vec<Vec<FileContent>>)| {
-          join_all(
-            paths_and_maybe_byteses
-              .into_iter()
-              .map(|(path, maybe_bytes)| {
-                maybe_bytes
-                  .ok_or_else(|| format!("Couldn't find file contents for {:?}", path))
-                  .map(|content| FileContent { path, content })
-              })
-              .collect::<Vec<Result<FileContent, _>>>(),
-          ).join(futures::future::ok(dirs))
-        },
-      )
       .map(|(mut files, dirs)| {
         for mut dir in dirs.into_iter() {
           files.append(&mut dir)
