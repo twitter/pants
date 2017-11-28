@@ -248,8 +248,8 @@ mod tests {
   use tempdir::TempDir;
   use self::testutil::make_file;
 
-  use super::super::{Digest, File, Fingerprint, GetFileDigest, PathGlobs, PathStat, PosixFS,
-                     ResettablePool, Snapshot, Store, VFS};
+  use super::super::{Digest, File, FileContent, Fingerprint, GetFileDigest, PathGlobs, PathStat,
+                     PosixFS, ResettablePool, Snapshot, Store, VFS};
 
   use std;
   use std::error::Error;
@@ -367,10 +367,7 @@ mod tests {
       .contents(store)
       .wait()
       .unwrap();
-    // TODO: Write helper for asserting equality of FileContents (and Vecs thereof).
-    assert_eq!(contents.len(), 1);
-    assert_eq!(contents.get(0).unwrap().path, file_name);
-    assert_eq!(contents.get(0).unwrap().content, STR.as_bytes().to_vec());
+    assert_snapshot_contents(contents, vec![(file_name, STR)]);
   }
 
   #[test]
@@ -404,17 +401,10 @@ mod tests {
       .contents(store)
       .wait()
       .unwrap();
-    // TODO: Write helper for asserting equality of FileContents (and Vecs thereof).
-    assert_eq!(contents.len(), 3);
-    assert_eq!(contents.get(0).unwrap().path, amy);
-    assert_eq!(contents.get(0).unwrap().content, LATIN.as_bytes().to_vec());
-    assert_eq!(contents.get(1).unwrap().path, rolex);
-    assert_eq!(
-      contents.get(1).unwrap().content,
-      AGGRESSIVE.as_bytes().to_vec()
+    assert_snapshot_contents(
+      contents,
+      vec![(amy, LATIN), (rolex, AGGRESSIVE), (roland, STR)],
     );
-    assert_eq!(contents.get(2).unwrap().path, roland);
-    assert_eq!(contents.get(2).unwrap().content, STR.as_bytes().to_vec());
   }
 
   #[derive(Clone)]
@@ -443,5 +433,17 @@ mod tests {
       .unwrap();
     v.sort_by(|a, b| a.path().cmp(b.path()));
     v
+  }
+
+  fn assert_snapshot_contents(contents: Vec<FileContent>, expected: Vec<(PathBuf, &str)>) {
+    let expected_with_array: Vec<_> = expected
+      .into_iter()
+      .map(|(path, s)| (path, s.as_bytes().to_vec()))
+      .collect();
+    let got: Vec<_> = contents
+      .into_iter()
+      .map(|file_content| (file_content.path, file_content.content))
+      .collect();
+    assert_eq!(expected_with_array, got);
   }
 }
