@@ -9,10 +9,11 @@ use itertools::Itertools;
 use {Digest, File, FileContent, PathStat, Store};
 use hash::Fingerprint;
 use protobuf;
+use std::collections::HashMap;
 use std::ffi::OsString;
 use std::fmt;
 use std::path::PathBuf;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 #[derive(Clone, PartialEq)]
 pub struct Snapshot {
@@ -31,20 +32,23 @@ impl Snapshot {
   >(
     store: Arc<Store>,
     file_digester: GFD,
-    mut path_stats: Vec<PathStat>,
+    path_stats: Vec<PathStat>,
   ) -> BoxFuture<Snapshot, String> {
-    path_stats.sort_by(|a, b| a.path().cmp(b.path()));
-    Snapshot::from_sorted_path_stats(store, file_digester, path_stats)
+    let mut sorted_path_stats = path_stats.clone();
+    sorted_path_stats.sort_by(|a, b| a.path().cmp(b.path()));
+    Snapshot::ingest_directory_from_sorted_path_stats(store, file_digester, sorted_path_stats)
+      .map(|digest| Snapshot { digest, path_stats })
+      .to_boxed()
   }
 
-  fn from_sorted_path_stats<
+  fn ingest_directory_from_sorted_path_stats<
     GFD: GetFileDigest<Error> + Sized + Clone,
     Error: fmt::Debug + 'static + Send,
   >(
     store: Arc<Store>,
     file_digester: GFD,
     path_stats: Vec<PathStat>,
-  ) -> BoxFuture<Snapshot, String> {
+  ) -> BoxFuture<Digest, String> {
     let mut file_futures: Vec<BoxFuture<bazel_protos::remote_execution::FileNode, String>> =
       Vec::new();
     let mut dir_futures: Vec<BoxFuture<bazel_protos::remote_execution::DirectoryNode, String>> =
@@ -99,14 +103,14 @@ impl Snapshot {
       } else {
         dir_futures.push(
           // TODO: Memoize this in the graph
-          Snapshot::from_sorted_path_stats(
+          Snapshot::ingest_directory_from_sorted_path_stats(
             store.clone(),
             file_digester.clone(),
             paths_of_child_dir(path_group),
-          ).and_then(move |snapshot| {
+          ).and_then(move |digest| {
             let mut dir_node = bazel_protos::remote_execution::DirectoryNode::new();
             dir_node.set_name(osstring_as_utf8(first_component)?);
-            dir_node.set_digest(snapshot.digest.into());
+            dir_node.set_digest(digest.into());
             Ok(dir_node)
           })
             .to_boxed(),
@@ -119,22 +123,39 @@ impl Snapshot {
         let mut directory = bazel_protos::remote_execution::Directory::new();
         directory.set_directories(protobuf::RepeatedField::from_vec(dirs));
         directory.set_files(protobuf::RepeatedField::from_vec(files));
-        store.record_directory(&directory).map(move |digest| {
-          Snapshot {
-            digest: digest,
-            path_stats: path_stats,
-          }
-        })
+        store.record_directory(&directory)
       })
       .to_boxed()
   }
 
   pub fn contents(self, store: Arc<Store>) -> BoxFuture<Vec<FileContent>, String> {
-    Snapshot::contents_for_directory_helper(self.digest.0, store, PathBuf::from(""))
-      .map(|mut v| {
-        v.sort_by(|a, b| a.path.cmp(&b.path));
-        v
+    let contents = Arc::new(Mutex::new(HashMap::new()));
+    let path_stats = self.path_stats;
+    Snapshot::contents_for_directory_helper(
+      self.digest.0,
+      store,
+      PathBuf::from(""),
+      contents.clone(),
+    ).map(move |_| {
+      let mut contents = contents.lock().unwrap();
+      let mut vec = Vec::new();
+      for path in path_stats.iter().filter_map(|path_stat| match path_stat {
+        &PathStat::File { ref path, .. } => Some(path.to_path_buf()),
+        &PathStat::Dir { .. } => None,
       })
+      {
+        match contents.remove(&path) {
+          Some(content) => vec.push(FileContent { path, content }),
+          None => {
+            panic!(format!(
+              "PathStat for {:?} was present in path_stats but missing from Snapshot contents",
+              path
+            ));
+          }
+        }
+      }
+      vec
+    })
       .to_boxed()
   }
 
@@ -144,7 +165,8 @@ impl Snapshot {
     fingerprint: Fingerprint,
     store: Arc<Store>,
     path_so_far: PathBuf,
-  ) -> BoxFuture<Vec<FileContent>, String> {
+    contents_wrapped: Arc<Mutex<HashMap<PathBuf, Vec<u8>>>>,
+  ) -> BoxFuture<(), String> {
     store
       .load_directory(fingerprint)
       .and_then(move |maybe_dir| {
@@ -153,45 +175,50 @@ impl Snapshot {
         })
       })
       .and_then(move |dir| {
+        let contents_wrapped_copy = contents_wrapped.clone();
+        let path_so_far_copy = path_so_far.clone();
+        let store_copy = store.clone();
         let file_futures = join_all(
           dir
             .get_files()
             .iter()
-            .map(|file_node| {
-              let path = path_so_far.join(file_node.get_name());
-              store
+            .map(move |file_node| {
+              let path = path_so_far_copy.join(file_node.get_name());
+              let contents_wrapped_copy = contents_wrapped_copy.clone();
+              store_copy
                 .load_file_bytes_with(
                   Fingerprint::from_hex_string(file_node.get_digest().get_hash()).unwrap(),
                   move |bytes| bytes.to_vec()
                 )
                 .and_then(move |maybe_bytes| {
                   maybe_bytes.ok_or_else(|| format!("Couldn't find file contents for {:?}", path))
-                      .map(|content| FileContent { path, content })
+                      .map(move |bytes| {
+                        let mut contents = contents_wrapped_copy.lock().unwrap();
+                        contents.insert(path, bytes);
+                      })
                 })
             })
             .collect::<Vec<_>>(),
         );
+        let contents_wrapped_copy2 = contents_wrapped.clone();
+        let store_copy = store.clone();
         let dir_futures = join_all(
           dir
             .get_directories()
             .iter()
-            .map(|dir_node| {
+            .map(move |dir_node| {
               Snapshot::contents_for_directory_helper(
                 Fingerprint::from_hex_string(dir_node.get_digest().get_hash()).unwrap(),
-                store.clone(),
+                store_copy.clone(),
                 path_so_far.join(dir_node.get_name()),
+                contents_wrapped_copy2.clone(),
               )
             })
             .collect::<Vec<_>>(),
         );
         file_futures.join(dir_futures)
       })
-      .map(|(mut files, dirs)| {
-        for mut dir in dirs.into_iter() {
-          files.append(&mut dir)
-        }
-        files
-      })
+      .map(|(_, _)| ())
       .to_boxed()
   }
 }
@@ -253,7 +280,7 @@ mod tests {
 
   use std;
   use std::error::Error;
-  use std::path::PathBuf;
+  use std::path::{Path, PathBuf};
   use std::sync::Arc;
 
   const AGGRESSIVE: &str = "Aggressive";
@@ -339,7 +366,7 @@ mod tests {
     let mut unsorted_path_stats = sorted_path_stats.clone();
     unsorted_path_stats.reverse();
     assert_eq!(
-      Snapshot::from_path_stats(store, digester, unsorted_path_stats)
+      Snapshot::from_path_stats(store, digester, unsorted_path_stats.clone())
         .wait()
         .unwrap(),
       Snapshot {
@@ -349,7 +376,7 @@ mod tests {
           ).unwrap(),
           232,
         ),
-        path_stats: sorted_path_stats,
+        path_stats: unsorted_path_stats,
       }
     );
   }
@@ -367,7 +394,7 @@ mod tests {
       .contents(store)
       .wait()
       .unwrap();
-    assert_snapshot_contents(contents, vec![(file_name, STR)]);
+    assert_snapshot_contents(contents, vec![(&file_name, STR)]);
   }
 
   #[test]
@@ -395,16 +422,31 @@ mod tests {
     let path_stats_sorted = expand_all_sorted(posix_fs);
     let mut path_stats_reversed = path_stats_sorted.clone();
     path_stats_reversed.reverse();
-    let contents = Snapshot::from_path_stats(store.clone(), digester, path_stats_reversed)
-      .wait()
-      .unwrap()
-      .contents(store)
-      .wait()
-      .unwrap();
-    assert_snapshot_contents(
-      contents,
-      vec![(amy, LATIN), (rolex, AGGRESSIVE), (roland, STR)],
-    );
+    {
+      let contents =
+        Snapshot::from_path_stats(store.clone(), digester.clone(), path_stats_reversed)
+          .wait()
+          .unwrap()
+          .contents(store.clone())
+          .wait()
+          .unwrap();
+      assert_snapshot_contents(
+        contents,
+        vec![(&roland, STR), (&rolex, AGGRESSIVE), (&amy, LATIN)],
+      );
+    }
+    {
+      let contents = Snapshot::from_path_stats(store.clone(), digester, path_stats_sorted)
+        .wait()
+        .unwrap()
+        .contents(store)
+        .wait()
+        .unwrap();
+      assert_snapshot_contents(
+        contents,
+        vec![(&amy, LATIN), (&rolex, AGGRESSIVE), (&roland, STR)],
+      );
+    }
   }
 
   #[derive(Clone)]
@@ -435,10 +477,10 @@ mod tests {
     v
   }
 
-  fn assert_snapshot_contents(contents: Vec<FileContent>, expected: Vec<(PathBuf, &str)>) {
+  fn assert_snapshot_contents(contents: Vec<FileContent>, expected: Vec<(&Path, &str)>) {
     let expected_with_array: Vec<_> = expected
       .into_iter()
-      .map(|(path, s)| (path, s.as_bytes().to_vec()))
+      .map(|(path, s)| (path.to_path_buf(), s.as_bytes().to_vec()))
       .collect();
     let got: Vec<_> = contents
       .into_iter()
