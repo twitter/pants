@@ -276,9 +276,17 @@ mod local {
   impl ByteStore {
     pub fn new<P: AsRef<Path>>(path: P, pool: Arc<ResettablePool>) -> Result<ByteStore, String> {
       let env = Environment::new()
-        // Without this flag, read transactions don't give up their reader slots until the thread
-        // they originated from dies. With the flag, read transactions give up their reader slots
-        // when they drop, which is much more friendly.
+        // Without this flag, each time a read transaction is started, it eats into our transaction
+        // limit (default: 126) until that thread dies.
+        //
+        // This flag makes transactions are removed from that limit when they are dropped, rather
+        // than when their thread dies. This is important, because we perform reads from a thread
+        // pool, so our threads never die. Without this flag, all read requests will fail after the
+        // first 126.
+        //
+        // The only down-side is that you need to make sure that any individual OS thread must not
+        // try to perform multiple write transactions concurrently. Fortunately, this property
+        // holds for us.
         .set_flags(NO_TLS)
         // 2 DBs; one for file contents, one for directories.
         .set_max_dbs(2)
