@@ -248,7 +248,7 @@ mod local {
   use boxfuture::{Boxable, BoxFuture};
   use digest::{Digest as DigestTrait, FixedOutput};
   use futures::Future;
-  use lmdb::{Database, DatabaseFlags, Environment, NO_OVERWRITE, Transaction};
+  use lmdb::{Database, DatabaseFlags, Environment, NO_OVERWRITE, NO_TLS, Transaction};
   use lmdb::Error::{KeyExist, NotFound};
   use sha2::Sha256;
   use std::error::Error;
@@ -275,8 +275,12 @@ mod local {
 
   impl ByteStore {
     pub fn new<P: AsRef<Path>>(path: P, pool: Arc<ResettablePool>) -> Result<ByteStore, String> {
-      // 2 DBs; one for file contents, one for directories.
       let env = Environment::new()
+        // Without this flag, read transactions don't give up their reader slots until the thread
+        // they originated from dies. With the flag, read transactions give up their reader slots
+        // when they drop, which is much more friendly.
+        .set_flags(NO_TLS)
+        // 2 DBs; one for file contents, one for directories.
         .set_max_dbs(2)
         .set_map_size(16 * 1024 * 1024 * 1024)
         .open(path.as_ref())
