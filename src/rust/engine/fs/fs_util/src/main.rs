@@ -236,10 +236,10 @@ fn execute(top_match: clap::ArgMatches) -> Result<(), ExitError> {
             .and_then(move |paths| {
               Snapshot::from_path_stats(
                 store.clone(),
-                Arc::new(FileSaver {
+                FileSaver {
                   store: store.clone(),
                   posix_fs: posix_fs,
-                }),
+                },
                 paths,
               )
             })
@@ -321,6 +321,7 @@ fn make_posix_fs<P: AsRef<Path>>(root: P, pool: Arc<ResettablePool>) -> fs::Posi
   fs::PosixFS::new(&root, pool, vec![]).unwrap()
 }
 
+#[derive(Clone)]
 struct FileSaver {
   store: Arc<Store>,
   posix_fs: Arc<fs::PosixFS>,
