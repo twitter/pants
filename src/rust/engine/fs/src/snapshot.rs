@@ -146,7 +146,7 @@ impl Snapshot {
     path_so_far: PathBuf,
   ) -> BoxFuture<Vec<FileContent>, String> {
     store
-      .load_directory_proto(fingerprint)
+      .load_directory(fingerprint)
       .and_then(move |maybe_dir| {
         maybe_dir.ok_or_else(|| {
           format!("Could not find directory with fingerprint {}", fingerprint)
@@ -160,13 +160,13 @@ impl Snapshot {
             .map(|file_node| {
               let path = path_so_far.join(file_node.get_name());
               store
-                .load_file_bytes(
+                .load_file_bytes_with(
                   Fingerprint::from_hex_string(file_node.get_digest().get_hash()).unwrap(),
+                  move |bytes| bytes.to_vec()
                 )
-                .and_then(|maybe_bytes| {
-                  maybe_bytes
-                    .ok_or_else(|| format!("Couldn't find file contents for {:?}", path))
-                    .map(|content| FileContent { path, content })
+                .and_then(move |maybe_bytes| {
+                  maybe_bytes.ok_or_else(|| format!("Couldn't find file contents for {:?}", path))
+                      .map(|content| FileContent { path, content })
                 })
             })
             .collect::<Vec<_>>(),
