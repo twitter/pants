@@ -19,9 +19,9 @@ from pants_test.engine.util import init_native
 
 
 # TODO: These aren't tests themselves, so they should be under examples/ or testprojects/?
-def visualize_execution_graph(scheduler):
+def visualize_execution_graph(scheduler, request):
   with temporary_file_path(cleanup=False, suffix='.dot') as dot_file:
-    scheduler.visualize_graph_to_file(dot_file)
+    scheduler.visualize_graph_to_file(request, dot_file)
     print('dot file saved to: {}'.format(dot_file))
 
   with temporary_file_path(cleanup=False, suffix='.svg') as image_file:
@@ -35,9 +35,8 @@ def visualize_build_request(build_root, goals, subjects):
   scheduler = setup_json_scheduler(build_root, native)
 
   execution_request = scheduler.build_request(goals, subjects)
-  # NB: Calls `schedule` independently of `execute`, in order to render a graph before validating it.
   scheduler.schedule(execution_request)
-  visualize_execution_graph(scheduler)
+  visualize_execution_graph(scheduler, execution_request)
 
 
 def pop_build_root_and_goals(description, args):
@@ -74,6 +73,22 @@ def main_addresses():
   spec_roots = [cmd_line_spec_parser.parse_spec(spec) for spec in args]
   visualize_build_request(build_root, goals, spec_roots)
 
+
+def main_addresses_loop():
+  build_root, goals, args = pop_build_root_and_goals(
+    '[build root path] [goal]+ [address spec]*', sys.argv[1:])
+
+  cmd_line_spec_parser = CmdLineSpecParser(build_root)
+  spec_roots = [cmd_line_spec_parser.parse_spec(spec) for spec in args]
+  native = init_native()
+  scheduler = setup_json_scheduler(build_root, native)
+
+  # Repeatedly re-execute, waiting on an instance of watchman in between.
+  execution_request = scheduler.build_request(goals, spec_roots)
+  while True:
+    result = scheduler.execute(execution_request)
+    print('>>> {}'.format(result))
+    raise Exception('Cool, that worked.')
 
 def main_filespecs():
   build_root, goals, args = pop_build_root_and_goals(

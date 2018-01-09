@@ -74,6 +74,14 @@ python_binary(
 )
 
 python_binary(
+  name='loop',
+  entry_point='pants_test.engine.examples.visualizer:main_addresses_loop',
+  dependencies=[
+    ':visualizer'
+  ]
+)
+
+python_binary(
   name='viz-fs',
   entry_point='pants_test.engine.examples.visualizer:main_filespecs',
   dependencies=[
