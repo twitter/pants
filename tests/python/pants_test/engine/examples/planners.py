@@ -27,6 +27,8 @@ from pants.engine.struct import HasProducts, Struct, StructWithDeps, Variants
 from pants.java.distribution.distribution import Distribution
 from pants.java.nailgun_executor import NailgunExecutor
 from pants.java.util import execute_java
+from pants.util.contextutil import temporary_dir
+from pants.util.dirutil import safe_file_dump
 from pants.util.meta import AbstractClass
 from pants.util.objects import datatype
 from pants_test.engine.examples.parsers import JsonParser
@@ -351,21 +353,33 @@ def javac(sources, classpath):
 
 
 @rule(Classpath,
-      [Select(ScalaSources),
+      [SelectProjection(FilesContent, PathGlobs, 'path_globs', ScalaSources),
        SelectDependencies(Classpath, ScalaSources, field_types=(Address, Jar)),
        Select(NailgunExecutor)])
 @printing_func
-def scalac(sources, classpath, executor):
-  scalac_classpath=[
+def scalac(sources_content, classpath, executor):
+  scala_library = '/Users/stuhood/.ivy2/cache/org.scala-lang/scala-library/jars/scala-library-2.11.11.jar'
+  scalac_classpath = [
       '/Users/stuhood/.ivy2/cache/org.scala-lang/scala-compiler/jars/scala-compiler-2.11.11.jar',
-      '/Users/stuhood/.ivy2/cache/org.scala-lang/scala-library/jars/scala-library-2.11.11.jar',
       '/Users/stuhood/.ivy2/cache/org.scala-lang/scala-reflect/jars/scala-reflect-2.11.11.jar',
+      scala_library,
     ]
-  res = execute_java(classpath=scalac_classpath,
-                     main='scala.tools.nsc.MainGenericRunner',
-                     args=['-help'],
-                     executor=executor,
-                     create_synthetic_jar=False)
+  with temporary_dir() as tmp_dir:
+    paths = []
+    for idx, fc in enumerate(sources_content.dependencies):
+      path = os_path_join(tmp_dir, '{}.scala'.format(idx))
+      safe_file_dump(path, fc.content)
+      paths.append(path)
+    res = execute_java(classpath=scalac_classpath,
+                       main='scala.tools.nsc.Main',
+                       args=[
+                         '-d', tmp_dir,
+                         '-classpath', scala_library,
+                         ] + paths,
+                       executor=executor,
+                       create_synthetic_jar=False)
+    if res != 0:
+      raise Exception('Failed to compile {}'.format(sources_content))
   return Classpath(creator='scalac')
 
 
@@ -471,6 +485,7 @@ def setup_json_scheduler(build_root, native):
                                      distribution,
                                      connect_timeout=10,
                                      connect_attempts=10)
+
 
   goals = {
       'compile': Classpath,
