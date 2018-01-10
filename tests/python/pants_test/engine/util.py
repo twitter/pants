@@ -14,21 +14,21 @@ from pants.engine.parser import SymbolTable
 from pants.engine.rules import RuleIndex
 from pants.engine.scheduler import WrappedNativeScheduler
 from pants.engine.struct import HasProducts, Struct
+from pants.init.subprocess import Subprocess
 from pants.option.options_bootstrapper import OptionsBootstrapper
 from pants.pantsd.watchman_launcher import WatchmanLauncher
-from pants_test.option.util.fakes import create_options_for_optionables
-from pants_test.subsystem.subsystem_util import init_subsystem
 
 
 def init_watchman_launcher():
   bootstrap_options = OptionsBootstrapper().get_bootstrap_options()
+  Subprocess.Factory.options_scope = ''
+  Subprocess.Factory.set_options(bootstrap_options)
   return WatchmanLauncher.create(bootstrap_options.for_global_scope())
 
 
 def init_native():
   """Initialize and return a `Native` instance."""
-  init_subsystem(BinaryUtil.Factory)
-  opts = create_options_for_optionables([])
+  opts = OptionsBootstrapper().get_bootstrap_options()
   return Native.create(opts.for_global_scope())
 
 

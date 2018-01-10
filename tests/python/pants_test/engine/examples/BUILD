@@ -35,6 +35,8 @@ python_library(
     'src/python/pants/engine:scheduler',
     'src/python/pants/engine:selectors',
     'src/python/pants/engine:struct',
+    'src/python/pants/java/distribution',
+    'src/python/pants/java:nailgun_executor',
   ]
 )
 

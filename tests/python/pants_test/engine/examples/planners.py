@@ -24,6 +24,8 @@ from pants.engine.rules import SingletonRule, TaskRule, rule
 from pants.engine.scheduler import LocalScheduler
 from pants.engine.selectors import Select, SelectDependencies, SelectProjection, SelectVariant
 from pants.engine.struct import HasProducts, Struct, StructWithDeps, Variants
+from pants.java.distribution.distribution import Distribution
+from pants.java.nailgun_executor import NailgunExecutor
 from pants.util.meta import AbstractClass
 from pants.util.objects import datatype
 from pants_test.engine.examples.parsers import JsonParser
@@ -449,6 +451,15 @@ def setup_json_scheduler(build_root, native):
   work_dir = os_path_join(build_root, '.pants.d')
   project_tree = FileSystemProjectTree(build_root)
 
+  distribution = Distribution(home_path='/Library/Java/JavaVirtualMachines/jdk1.8.0_111.jdk/Contents/Home',
+                              jdk=True)
+  nailgun_executor = NailgunExecutor('executor',
+                                     work_dir,
+                                     ['/Users/stuhood/.ivy2/pants/com.martiansoftware/nailgun-server/jars/nailgun-server-0.9.1.jar'],
+                                     distribution,
+                                     connect_timeout=10,
+                                     connect_attempts=10)
+
   goals = {
       'compile': Classpath,
       # TODO: to allow for running resolve alone, should split out a distinct 'IvyReport' product.
@@ -483,6 +494,7 @@ def setup_json_scheduler(build_root, native):
       write_name_file,
       javac,
       scalac,
+      SingletonRule(NailgunExecutor, nailgun_executor),
     ] + (
       create_graph_rules(address_mapper, symbol_table)
     ) + (
