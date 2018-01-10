@@ -10,8 +10,10 @@ import sys
 from textwrap import dedent
 import Queue
 import threading
+import time
 
 from pants.base.cmd_line_spec_parser import CmdLineSpecParser
+from pants.build_graph.address import Address
 from pants.engine.fs import PathGlobs
 from pants.pantsd.service.fs_event_service import FSEventService
 from pants.logging.setup import setup_logging
@@ -98,7 +100,7 @@ def main_addresses_loop():
     '[build root path] [goal]+ [address spec]*', sys.argv[1:])
 
   cmd_line_spec_parser = CmdLineSpecParser(build_root)
-  spec_roots = [cmd_line_spec_parser.parse_spec(spec) for spec in args]
+  spec_roots = [Address.parse(spec) for spec in args]
   setup_logging('DEBUG', console_stream=sys.stderr)
   native = init_native()
   watchman_launcher = init_watchman_launcher()
@@ -108,15 +110,19 @@ def main_addresses_loop():
 
   # Repeatedly re-execute, waiting on an instance of watchman in between.
   execution_request = scheduler.build_request(goals, spec_roots)
+  start = time.time()
   while True:
     # Run once.
-    result = scheduler.execute(execution_request)
-    print('>>> {}'.format(result))
+    result = scheduler.execute(execution_request).root_products[0][1]
+    print('>' * 100)
+    print('>>> Completed request in {} seconds: {}'.format(time.time() - start, result))
+    print('>' * 100)
     # Wait for a filesystem invalidation event.
     while True:
       try:
         invalidated = 0
         event = fs_event_queue.get(timeout=1)
+        start = time.time()
         if not event['is_fresh_instance']:
           files = [f.decode('utf-8') for f in event['files']]
           invalidated = scheduler.invalidate_files(files)
@@ -125,6 +131,7 @@ def main_addresses_loop():
           break
       except Queue.Empty:
         continue
+
 
 def main_filespecs():
   build_root, goals, args = pop_build_root_and_goals(
