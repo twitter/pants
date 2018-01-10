@@ -8,15 +8,15 @@ from __future__ import (absolute_import, division, generators, nested_scopes, pr
 import os
 import sys
 from textwrap import dedent
+import Queue
 import threading
 
 from pants.base.cmd_line_spec_parser import CmdLineSpecParser
 from pants.engine.fs import PathGlobs
 from pants.pantsd.service.fs_event_service import FSEventService
-from pants.pantsd.service.scheduler_service import SchedulerService
+from pants.logging.setup import setup_logging
 from pants.util import desktop
 from pants.util.contextutil import temporary_file_path
-from pants.util.objects import datatype
 from pants.util.process_handler import subprocess
 from pants_test.engine.examples.planners import setup_json_scheduler
 from pants_test.engine.util import init_native, init_watchman_launcher
@@ -78,21 +78,19 @@ def main_addresses():
   visualize_build_request(build_root, goals, spec_roots)
 
 
-def launch_services(build_root, scheduler, watchman):
-  FakeLegacyGraphHelper = datatype('FakeLegacyGraphHelper', ['scheduler'])
-  fs_event_service = FSEventService(watchman, build_root, 1)
-  scheduler_service = SchedulerService(fs_event_service, FakeLegacyGraphHelper(scheduler))
-  services = [fs_event_service, scheduler_service]
+def launch_fs_event_service(build_root, watchman):
+  lock = threading.RLock()
+  queue = Queue.Queue(maxsize=64)
 
-  lifecycle_lock = threading.RLock()
-  fork_lock = threading.RLock()
-  for service in services:
-    service.setup(lifecycle_lock, fork_lock)
-  for service in services:
-    t = threading.Thread(target=service.run)
-    t.daemon = True
-    t.start()
-  return services
+  fs_event_service = FSEventService(watchman, build_root, 1)
+  fs_event_service.setup(lock, lock)
+  fs_event_service.register_all_files_handler(queue.put)
+
+  t = threading.Thread(target=fs_event_service.run)
+  t.daemon = True
+  t.start()
+
+  return queue
 
 
 def main_addresses_loop():
@@ -101,18 +99,32 @@ def main_addresses_loop():
 
   cmd_line_spec_parser = CmdLineSpecParser(build_root)
   spec_roots = [cmd_line_spec_parser.parse_spec(spec) for spec in args]
+  setup_logging('DEBUG', console_stream=sys.stderr)
   native = init_native()
   watchman_launcher = init_watchman_launcher()
   watchman_launcher.maybe_launch()
   scheduler = setup_json_scheduler(build_root, native)
-  services = launch_services(build_root, scheduler, watchman_launcher.watchman)
+  fs_event_queue = launch_fs_event_service(build_root, watchman_launcher.watchman)
 
   # Repeatedly re-execute, waiting on an instance of watchman in between.
   execution_request = scheduler.build_request(goals, spec_roots)
   while True:
+    # Run once.
     result = scheduler.execute(execution_request)
     print('>>> {}'.format(result))
-    raise Exception('Cool, that worked.')
+    # Wait for a filesystem invalidation event.
+    while True:
+      try:
+        invalidated = 0
+        event = fs_event_queue.get(timeout=1)
+        if not event['is_fresh_instance']:
+          files = [f.decode('utf-8') for f in event['files']]
+          invalidated = scheduler.invalidate_files(files)
+        fs_event_queue.task_done()
+        if invalidated:
+          break
+      except Queue.Empty:
+        continue
 
 def main_filespecs():
   build_root, goals, args = pop_build_root_and_goals(
