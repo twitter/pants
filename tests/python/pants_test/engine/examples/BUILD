@@ -61,6 +61,8 @@ python_library(
     'src/python/pants/util:contextutil',
     'src/python/pants/util:desktop',
     'src/python/pants/util:process_handler',
+    'src/python/pants/pantsd/service:fs_event_service',
+    'src/python/pants/pantsd/service:scheduler_service',
     'tests/python/pants_test/engine:util',
   ]
 )

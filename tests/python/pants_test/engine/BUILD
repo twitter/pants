@@ -12,6 +12,8 @@ python_library(
     'src/python/pants/engine:rules',
     'src/python/pants/engine:scheduler',
     'src/python/pants/engine:struct',
+    'src/python/pants/option',
+    'src/python/pants/pantsd:watchman_launcher',
     'tests/python/pants_test/option/util',
     'tests/python/pants_test/subsystem:subsystem_utils',
   ],
