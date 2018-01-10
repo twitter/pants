@@ -26,6 +26,7 @@ from pants.engine.selectors import Select, SelectDependencies, SelectProjection,
 from pants.engine.struct import HasProducts, Struct, StructWithDeps, Variants
 from pants.java.distribution.distribution import Distribution
 from pants.java.nailgun_executor import NailgunExecutor
+from pants.java.util import execute_java
 from pants.util.meta import AbstractClass
 from pants.util.objects import datatype
 from pants_test.engine.examples.parsers import JsonParser
@@ -351,9 +352,20 @@ def javac(sources, classpath):
 
 @rule(Classpath,
       [Select(ScalaSources),
-       SelectDependencies(Classpath, ScalaSources, field_types=(Address, Jar))])
+       SelectDependencies(Classpath, ScalaSources, field_types=(Address, Jar)),
+       Select(NailgunExecutor)])
 @printing_func
-def scalac(sources, classpath):
+def scalac(sources, classpath, executor):
+  scalac_classpath=[
+      '/Users/stuhood/.ivy2/cache/org.scala-lang/scala-compiler/jars/scala-compiler-2.11.11.jar',
+      '/Users/stuhood/.ivy2/cache/org.scala-lang/scala-library/jars/scala-library-2.11.11.jar',
+      '/Users/stuhood/.ivy2/cache/org.scala-lang/scala-reflect/jars/scala-reflect-2.11.11.jar',
+    ]
+  res = execute_java(classpath=scalac_classpath,
+                     main='scala.tools.nsc.MainGenericRunner',
+                     args=['-help'],
+                     executor=executor,
+                     create_synthetic_jar=False)
   return Classpath(creator='scalac')
 
 
