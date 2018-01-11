@@ -26,9 +26,10 @@ def init_watchman_launcher():
   return WatchmanLauncher.create(bootstrap_options.for_global_scope())
 
 
-def init_native():
+def init_native(visualize_to=None):
   """Initialize and return a `Native` instance."""
-  opts = OptionsBootstrapper().get_bootstrap_options()
+  args = ['--native-engine-visualize-to={}'.format(visualize_to)] if visualize_to else []
+  opts = OptionsBootstrapper(args=args).get_bootstrap_options()
   return Native.create(opts.for_global_scope())
 
 

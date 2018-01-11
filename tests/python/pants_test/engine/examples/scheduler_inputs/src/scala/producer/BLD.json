@@ -1,6 +1,6 @@
 {
   "type_alias": "target",
-  "name": "inferred_deps",
+  "name": "producer",
   "configurations": [
     {
       "type_alias": "inferred_scala",

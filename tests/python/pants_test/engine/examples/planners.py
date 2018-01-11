@@ -352,19 +352,31 @@ def javac(sources, classpath):
   return Classpath(creator='javac')
 
 
+class ScalaFilesContent(datatype('ScalaFilesContent', ['dependencies'])):
+  pass
+
+
+@rule(ScalaFilesContent, [SelectProjection(FilesContent, PathGlobs, 'path_globs', ScalaSources)])
+def files_content_for_scala_sources(files_content):
+  return ScalaFilesContent(files_content.dependencies)
+
+
 @rule(Classpath,
       [SelectProjection(FilesContent, PathGlobs, 'path_globs', ScalaSources),
-       SelectDependencies(Classpath, ScalaSources, field_types=(Address, Jar)),
+       SelectDependencies(ScalaFilesContent, ScalaSources, field_types=(Address,)),
        Select(NailgunExecutor)])
 @printing_func
-def scalac(sources_content, classpath, executor):
+def scalac(sources_content, dependencies_content, executor):
   scalac_classpath = [
       '/Users/stuhood/src/pants/demo_inputs/rscjvm_2.11-a39fbaf6.jar',
       '/Users/stuhood/.ivy2/cache/org.scala-lang/scala-library/jars/scala-library-2.11.11.jar',
     ]
   with temporary_dir() as tmp_dir:
     paths = ['/Users/stuhood/src/pants/demo_inputs/Stdlib.scala']
-    for idx, fc in enumerate(sources_content.dependencies):
+    all_fcs = [fc
+               for files_content in ((sources_content,) + dependencies_content)
+               for fc in files_content.dependencies]
+    for idx, fc in enumerate(all_fcs):
       path = os_path_join(tmp_dir, '{}.scala'.format(idx))
       safe_file_dump(path, fc.content)
       paths.append(path)
@@ -374,7 +386,7 @@ def scalac(sources_content, classpath, executor):
                        executor=executor,
                        create_synthetic_jar=False)
     if res != 0:
-      raise Exception('Failed to compile {}'.format(sources_content))
+      raise Exception('Failed to compile {}'.format([fc.path for fc in all_fcs]))
   return Classpath(creator='rsc')
 
 
@@ -516,6 +528,7 @@ def setup_json_scheduler(build_root, native):
       write_name_file,
       javac,
       scalac,
+      files_content_for_scala_sources,
       SingletonRule(NailgunExecutor, nailgun_executor),
     ] + (
       create_graph_rules(address_mapper, symbol_table)

@@ -1,0 +1,10 @@
+{
+  "type_alias": "target",
+  "name": "consumer",
+  "configurations": [
+    {
+      "type_alias": "inferred_scala",
+      "files": ["*.scala"]
+    }
+  ]
+}
