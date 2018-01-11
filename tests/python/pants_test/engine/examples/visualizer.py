@@ -101,7 +101,7 @@ def main_addresses_loop():
 
   cmd_line_spec_parser = CmdLineSpecParser(build_root)
   spec_roots = [Address.parse(spec) for spec in args]
-  setup_logging('DEBUG', console_stream=sys.stderr)
+  setup_logging('INFO', console_stream=sys.stderr)
   native = init_native()
   watchman_launcher = init_watchman_launcher()
   watchman_launcher.maybe_launch()
@@ -114,9 +114,7 @@ def main_addresses_loop():
   while True:
     # Run once.
     result = scheduler.execute(execution_request).root_products[0][1]
-    print('>' * 100)
-    print('>>> Completed request in {} seconds: {}'.format(time.time() - start, result))
-    print('>' * 100)
+    print('>>>{:^80}<<<\n\n'.format('Completed iteration in {:.3f} secs: {}'.format(time.time() - start, result)))
     # Wait for a filesystem invalidation event.
     while True:
       try:
@@ -124,7 +122,8 @@ def main_addresses_loop():
         event = fs_event_queue.get(timeout=1)
         start = time.time()
         if not event['is_fresh_instance']:
-          files = [f.decode('utf-8') for f in event['files']]
+          # TODO: Ok, this just got nasty. But vim swap files have a dozen different names/patterns. Sigh.
+          files = [f.decode('utf-8') for f in event['files'] if f.endswith('.scala') or f.endswith('.json')]
           invalidated = scheduler.invalidate_files(files)
         fs_event_queue.task_done()
         if invalidated:
