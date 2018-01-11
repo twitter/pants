@@ -14,7 +14,7 @@ class PantsEngineIntegrationTest(PantsRunIntegrationTest):
     self.assert_success(pants_run)
     self.assertRegexpMatches(pants_run.stderr_data, 'build_graph is: .*LegacyBuildGraph')
     self.assertRegexpMatches(pants_run.stderr_data,
-                             'computed \d+ nodes in')
+                             'computed \d+ roots in')
     self.assertNotRegexpMatches(pants_run.stderr_data, 'pantsd is running at pid \d+')
 
   def test_engine_binary(self):

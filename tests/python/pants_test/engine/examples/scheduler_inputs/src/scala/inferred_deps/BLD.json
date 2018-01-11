@@ -4,7 +4,7 @@
   "configurations": [
     {
       "type_alias": "inferred_scala",
-      "files": ["InferDeps.scala"]
+      "files": ["*.scala"]
     }
   ]
 }

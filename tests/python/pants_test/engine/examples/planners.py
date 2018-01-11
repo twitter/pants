@@ -358,29 +358,24 @@ def javac(sources, classpath):
        Select(NailgunExecutor)])
 @printing_func
 def scalac(sources_content, classpath, executor):
-  scala_library = '/Users/stuhood/.ivy2/cache/org.scala-lang/scala-library/jars/scala-library-2.11.11.jar'
   scalac_classpath = [
-      '/Users/stuhood/.ivy2/cache/org.scala-lang/scala-compiler/jars/scala-compiler-2.11.11.jar',
-      '/Users/stuhood/.ivy2/cache/org.scala-lang/scala-reflect/jars/scala-reflect-2.11.11.jar',
-      scala_library,
+      '/Users/stuhood/src/pants/demo_inputs/rscjvm_2.11-a39fbaf6.jar',
+      '/Users/stuhood/.ivy2/cache/org.scala-lang/scala-library/jars/scala-library-2.11.11.jar',
     ]
   with temporary_dir() as tmp_dir:
-    paths = []
+    paths = ['/Users/stuhood/src/pants/demo_inputs/Stdlib.scala']
     for idx, fc in enumerate(sources_content.dependencies):
       path = os_path_join(tmp_dir, '{}.scala'.format(idx))
       safe_file_dump(path, fc.content)
       paths.append(path)
     res = execute_java(classpath=scalac_classpath,
-                       main='scala.tools.nsc.Main',
-                       args=[
-                         '-d', tmp_dir,
-                         '-classpath', scala_library,
-                         ] + paths,
+                       main='rsc.cli.Main',
+                       args=paths,
                        executor=executor,
                        create_synthetic_jar=False)
     if res != 0:
       raise Exception('Failed to compile {}'.format(sources_content))
-  return Classpath(creator='scalac')
+  return Classpath(creator='rsc')
 
 
 class Goal(AbstractClass):

@@ -1,2 +1,2 @@
 #!/bin/bash
-./pants -q run tests/python/pants_test/engine/examples:loop -- tests/python/pants_test/engine/examples/scheduler_inputs compile src/scala/inferred_deps
+./pants run tests/python/pants_test/engine/examples:loop -- tests/python/pants_test/engine/examples/scheduler_inputs compile src/scala/inferred_deps

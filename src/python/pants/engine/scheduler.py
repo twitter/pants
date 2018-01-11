@@ -426,7 +426,7 @@ class LocalScheduler(object):
                                    os.path.join(self._scheduler.visualize_to_dir(), name))
 
     logger.debug(
-      'computed %s nodes in %f seconds. there are %s total nodes.',
+      'computed %s roots in %f seconds. there are %s total nodes.',
       len(roots),
       time.time() - start_time,
       self._scheduler.graph_len()
