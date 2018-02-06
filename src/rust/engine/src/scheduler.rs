@@ -82,7 +82,7 @@ impl Scheduler {
     &self,
     subject_type: TypeId,
     selector: selectors::Selector,
-  ) -> Result<rule_graph::RuleEdges, String> {
+  ) -> Result<Arc<rule_graph::RuleEdges>, String> {
     self
       .core
       .rule_graph

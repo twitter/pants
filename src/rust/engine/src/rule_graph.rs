@@ -1,11 +1,11 @@
 // Copyright 2017 Pants project contributors (see CONTRIBUTORS.md).
 // Licensed under the Apache License, Version 2.0 (see LICENSE).
 
-
 use std::collections::{hash_map, HashMap, HashSet, VecDeque};
-use std::hash::Hash;
 use std::fmt;
+use std::hash::{Hash, Hasher};
 use std::io;
+use std::sync::Arc;
 
 use core::{ANY_TYPE, Function, Key, TypeConstraint, TypeId, Value};
 use externs;
@@ -793,13 +793,13 @@ impl RuleGraph {
     maker.full_graph()
   }
 
-  pub fn find_root_edges(&self, subject_type: TypeId, selector: Selector) -> Option<RuleEdges> {
-    // TODO return Result instead
+  pub fn find_root_edges(&self, subject_type: TypeId, selector: Selector) -> Option<Arc<RuleEdges>> {
     let root = RootEntry {
       subject_type: subject_type,
       clause: vec![selector],
     };
-    self.root_dependencies.get(&root).map(|e| e.clone())
+    // TODO: Store Arc rather than cloning.
+    self.root_dependencies.get(&root).map(|e| Arc::new(e.clone()))
   }
 
   pub fn task_for_inner(&self, entry: &Entry) -> Task {
@@ -810,7 +810,7 @@ impl RuleGraph {
     }
   }
 
-  pub fn edges_for_inner(&self, entry: &Entry) -> Option<RuleEdges> {
+  pub fn edges_for_inner(&self, entry: &Entry) -> Option<Arc<RuleEdges>> {
     if let &Entry::InnerEntry(ref inner) = entry {
       self.edges_for_inner_entry(inner)
     } else {
@@ -818,10 +818,11 @@ impl RuleGraph {
     }
   }
 
-  pub fn edges_for_inner_entry(&self, inner_entry: &InnerEntry) -> Option<RuleEdges> {
-    self.rule_dependency_edges.get(inner_entry).map(
-      |e| e.clone(),
-    )
+  pub fn edges_for_inner_entry(&self, inner_entry: &InnerEntry) -> Option<Arc<RuleEdges>> {
+    self.rule_dependency_edges.get(inner_entry).map(|e| {
+      // TODO: Store Arc rather than cloning.
+      Arc::new(e.clone())
+    })
   }
 
   pub fn validate(&self) -> Result<(), String> {
@@ -961,9 +962,14 @@ impl RuleGraph {
 #[derive(Eq, PartialEq, Clone, Debug)]
 pub struct RuleEdges {
   dependencies: Entries,
-  dependencies_by_select_key: HashMap<SelectKey, Entries>,
+  dependencies_by_select_key: HashMap<SelectKey, Arc<Entries>>,
 }
 
+impl Hash for RuleEdges {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.dependencies.hash(state);
+    }
+}
 
 impl RuleEdges {
   pub fn new() -> RuleEdges {
@@ -973,12 +979,12 @@ impl RuleEdges {
     }
   }
 
-  pub fn entries_for(&self, select_key: &SelectKey) -> Entries {
+  pub fn entries_for(&self, select_key: &SelectKey) -> Arc<Entries> {
     self
       .dependencies_by_select_key
       .get(select_key)
       .cloned()
-      .unwrap_or_else(|| Vec::new())
+      .unwrap_or_else(|| Arc::new(Vec::new()))
   }
 
   pub fn is_empty(&self) -> bool {
@@ -992,7 +998,7 @@ impl RuleEdges {
     let deps_for_selector = self
       .dependencies_by_select_key
       .entry(select_key)
-      .or_insert(vec![]);
+      .or_insert(Arc::new(Vec::new()));
     for d in new_dependencies {
       if !deps_for_selector.contains(d) {
         deps_for_selector.push(d.clone());
