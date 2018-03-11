@@ -138,11 +138,7 @@ impl Select {
       selector: selector,
       subject: subject,
       variants: variants,
-      entries: edges
-        .entries_for(&select_key)
-        .into_iter()
-        .filter(|e| e.matches_subject_type(subject.type_id().clone()))
-        .collect(),
+      entries: edges.entries_for(&select_key),
     }
   }
 
@@ -356,6 +352,7 @@ impl Select {
       self
         .entries
         .iter()
+        .filter(|e| e.matches_subject_type(self.subject.type_id().clone()))
         .map(|entry| {
           let task = context.core.rule_graph.task_for_inner(entry);
           context.get(Task {
@@ -466,26 +463,19 @@ impl SelectDependencies {
     // and if so, attempt to parse Variants there. See:
     //   https://github.com/pantsbuild/pants/issues/4020
 
-    let product_entries = self.rule_edges.entries_for(&rule_graph::SelectKey::ProjectedMultipleNestedSelect(
-      Selector::SelectDependencies(self.selector.clone()),
-      self.selector.field_types.clone(),
-      selectors::Select::without_variant(
-        self.selector.product.clone(),
+    let product_entries = self.rule_edges.entries_for(
+      &rule_graph::SelectKey::ProjectedMultipleNestedSelect(
+        Selector::SelectDependencies(self.selector.clone()),
+        self.selector.field_types.clone(),
+        selectors::Select::without_variant(self.selector.product.clone()),
       ),
-    ));
+    );
     let dep_subject_key = externs::key_for(dep_subject);
     Select {
       selector: selectors::Select::without_variant(self.selector.product),
       subject: dep_subject_key,
       variants: self.variants.clone(),
-      // NB: We're filtering out all of the entries for field types other than
-      //    dep_subject's since none of them will match.
-      entries: product_entries
-        .into_iter()
-        .filter(|e| {
-          e.matches_subject_type(dep_subject_key.type_id().clone())
-        })
-        .collect(),
+      entries: product_entries,
     }.run(context.clone())
   }
 }
@@ -493,12 +483,16 @@ impl SelectDependencies {
 impl SelectDependencies {
   fn run(self, context: Context) -> NodeFuture<Value> {
     // Filter entries by whether the subject type is the right subject type.
-    let dep_product_entries = self.rule_edges.entries_for(&rule_graph::SelectKey::NestedSelect(
-      Selector::SelectDependencies(self.selector.clone()),
-      selectors::Select::without_variant(
-        self.selector.dep_product.clone(),
+    let dep_product_entries = self.rule_edges.entries_for(
+      &rule_graph::SelectKey::NestedSelect(
+        Selector::SelectDependencies(
+          self.selector.clone(),
+        ),
+        selectors::Select::without_variant(
+          self.selector.dep_product.clone(),
+        ),
       ),
-    ));
+    );
     // Select the product holding the dependency list.
     Select {
       selector: selectors::Select::without_variant(self.selector.dep_product),
@@ -595,14 +589,7 @@ impl SelectTransitive {
       selector: selectors::Select::without_variant(self.selector.product),
       subject: subject_key,
       variants: self.variants.clone(),
-      // NB: We're filtering out all of the entries for field types other than
-      //     subject_key's since none of them will match.
-      entries: self
-        .product_entries
-        .clone()
-        .into_iter()
-        .filter(|e| e.matches_subject_type(subject_key.type_id().clone()))
-        .collect(),
+      entries: self.product_entries.clone(),
     }.run(context.clone())
       .map(move |product| {
         let deps = externs::project_multi(&product, &field_name);
@@ -719,19 +706,23 @@ impl SelectProjection {
 
 impl SelectProjection {
   fn run(self, context: Context) -> NodeFuture<Value> {
-    let input_product_entries = self.rule_edges.entries_for(&rule_graph::SelectKey::NestedSelect(
-      Selector::SelectProjection(self.selector.clone()),
-      selectors::Select::without_variant(
-        self.selector.input_product.clone(),
+    let input_product_entries = self.rule_edges.entries_for(
+      &rule_graph::SelectKey::NestedSelect(
+        Selector::SelectProjection(
+          self.selector.clone(),
+        ),
+        selectors::Select::without_variant(
+          self.selector.input_product.clone(),
+        ),
       ),
-    ));
-    let projected_entries = self.rule_edges.entries_for(&rule_graph::SelectKey::ProjectedNestedSelect(
-      Selector::SelectProjection(self.selector.clone()),
-      self.selector.projected_subject.clone(),
-      selectors::Select::without_variant(
-        self.selector.product.clone(),
+    );
+    let projected_entries = self.rule_edges.entries_for(
+      &rule_graph::SelectKey::ProjectedNestedSelect(
+        Selector::SelectProjection(self.selector.clone()),
+        self.selector.projected_subject.clone(),
+        selectors::Select::without_variant(self.selector.product.clone()),
       ),
-    ));
+    );
 
     // Request the product we need to compute the subject.
     Select {

@@ -793,13 +793,19 @@ impl RuleGraph {
     maker.full_graph()
   }
 
-  pub fn find_root_edges(&self, subject_type: TypeId, selector: Selector) -> Option<Arc<RuleEdges>> {
+  pub fn find_root_edges(
+    &self,
+    subject_type: TypeId,
+    selector: Selector,
+  ) -> Option<Arc<RuleEdges>> {
     let root = RootEntry {
       subject_type: subject_type,
       clause: vec![selector],
     };
     // TODO: Store Arc rather than cloning.
-    self.root_dependencies.get(&root).map(|e| Arc::new(e.clone()))
+    self.root_dependencies.get(&root).map(
+      |e| Arc::new(e.clone()),
+    )
   }
 
   pub fn task_for_inner(&self, entry: &Entry) -> Task {
@@ -966,9 +972,9 @@ pub struct RuleEdges {
 }
 
 impl Hash for RuleEdges {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.dependencies.hash(state);
-    }
+  fn hash<H: Hasher>(&self, state: &mut H) {
+    self.dependencies.hash(state);
+  }
 }
 
 impl RuleEdges {
@@ -995,10 +1001,12 @@ impl RuleEdges {
     if SelectKey::Nothing == select_key && !new_dependencies.is_empty() {
       panic!("Cannot specify a None selector with non-empty dependencies!")
     }
-    let deps_for_selector = self
-      .dependencies_by_select_key
-      .entry(select_key)
-      .or_insert(Arc::new(Vec::new()));
+    let deps_for_selector = Arc::make_mut(
+      self
+        .dependencies_by_select_key
+        .entry(select_key)
+        .or_insert(Arc::new(Vec::new())),
+    );
     for d in new_dependencies {
       if !deps_for_selector.contains(d) {
         deps_for_selector.push(d.clone());
@@ -1017,20 +1025,17 @@ impl RuleEdges {
     // Returns true if removing dep_to_eliminate makes this set of edges unfulfillable.
     if self.dependencies.len() == 1 && &self.dependencies[0] == dep_to_eliminate {
       true
-    } else if self.dependencies_by_select_key.values().any(|deps| {
-      deps.len() == 1 && &deps[0] == dep_to_eliminate
-    })
-    {
-      true
     } else {
-      false
+      self.dependencies_by_select_key.values().any(|deps| {
+        deps.len() == 1 && &deps[0] == dep_to_eliminate
+      })
     }
   }
 
   fn remove_rule(&mut self, dep: &Entry) {
     self.dependencies.retain(|d| d != dep);
     for (_, deps) in self.dependencies_by_select_key.iter_mut() {
-      deps.retain(|d| d != dep);
+      Arc::make_mut(deps).retain(|d| d != dep);
     }
   }
 }
