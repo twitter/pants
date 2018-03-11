@@ -2,6 +2,7 @@
 // Licensed under the Apache License, Version 2.0 (see LICENSE).
 
 use std::collections::{HashMap, HashSet};
+use std::sync::Arc;
 
 use core::{Field, Function, FNV, Key, TypeConstraint, TypeId, Value};
 use externs;
@@ -25,7 +26,7 @@ pub struct Tasks {
   // Singleton Values to be returned for a given TypeConstraint.
   singletons: HashMap<TypeConstraint, (Key, Value), FNV>,
   // any-subject, selector -> list of tasks implementing it
-  tasks: HashMap<TypeConstraint, Vec<Task>, FNV>,
+  tasks: HashMap<TypeConstraint, Vec<Arc<Task>>, FNV>,
   // Used during the construction of the tasks map.
   preparing: Option<Task>,
 }
@@ -59,7 +60,7 @@ impl Tasks {
       .collect::<HashSet<_>>()
   }
 
-  pub fn all_tasks(&self) -> Vec<&Task> {
+  pub fn all_tasks(&self) -> Vec<&Arc<Task>> {
     self.tasks.values().flat_map(|tasks| tasks).collect()
   }
 
@@ -67,7 +68,7 @@ impl Tasks {
     self.singletons.get(product)
   }
 
-  pub fn gen_tasks(&self, product: &TypeConstraint) -> Option<&Vec<Task>> {
+  pub fn gen_tasks(&self, product: &TypeConstraint) -> Option<&Vec<Arc<Task>>> {
     self.tasks.get(product)
   }
 
@@ -172,14 +173,15 @@ impl Tasks {
     let tasks = self.tasks.entry(task.product.clone()).or_insert_with(
       || Vec::new(),
     );
+    task.clause.shrink_to_fit();
+    let task_arc = Arc::new(task);
     assert!(
-      !tasks.contains(&task),
+      !tasks.contains(&task_arc),
       "{:?} was double-registered for {:?}: {:?}",
-      task,
-      task.product,
+      task_arc,
+      task_arc.product,
       tasks,
     );
-    task.clause.shrink_to_fit();
-    tasks.push(task);
+    tasks.push(task_arc);
   }
 }

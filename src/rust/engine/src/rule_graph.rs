@@ -25,7 +25,7 @@ pub enum Entry {
   Unreachable {
     // NB: unreachable is an error type, it might be better to name it error, but currently
     //     unreachable is the only error entry type.
-    rule: Task,
+    rule: Arc<Task>,
     reason: Diagnostic,
   },
 }
@@ -57,7 +57,7 @@ impl From<RootEntry> for Entry {
 #[derive(Eq, Hash, PartialEq, Clone, Debug)]
 pub struct InnerEntry {
   subject_type: TypeId,
-  rule: Task,
+  rule: Arc<Task>,
 }
 
 impl From<InnerEntry> for Entry {
@@ -67,10 +67,10 @@ impl From<InnerEntry> for Entry {
 }
 
 impl Entry {
-  fn new_inner(subject_type: TypeId, rule: &Task) -> Entry {
+  fn new_inner(subject_type: TypeId, rule: Arc<Task>) -> Entry {
     Entry::InnerEntry(InnerEntry {
       subject_type: subject_type,
-      rule: rule.clone(),
+      rule: rule,
     })
   }
 
@@ -78,7 +78,7 @@ impl Entry {
     Entry::SubjectIsProduct { subject_type: subject_type }
   }
 
-  fn new_unreachable(rule: &Task) -> Entry {
+  fn new_unreachable(rule: &Arc<Task>) -> Entry {
     Entry::Unreachable {
       rule: rule.clone(),
       reason: Diagnostic {
@@ -272,12 +272,11 @@ impl<'t> GraphMaker<'t> {
     let unreachable_rules: HashSet<_> = self
       .tasks
       .all_tasks()
-      .iter()
-      .filter(|r| !rules_in_graph.contains(r))
+      .into_iter()
+      .filter(|r| !rules_in_graph.contains(*r))
       .filter(|r| {
         !unfulfillable_discovered_during_construction.contains(r)
       })
-      .map(|&r| r)
       .collect();
 
     for rule in unreachable_rules {
@@ -320,200 +319,198 @@ impl<'t> GraphMaker<'t> {
         }
       }
       let mut was_unfulfillable = false;
-      match entry {
-        Entry::InnerEntry(InnerEntry { rule: Task { ref clause, .. }, .. }) |
-        Entry::Root(RootEntry { ref clause, .. }) => {
-          for selector in clause {
-            match selector {
-              &Selector::Select(ref select) => {
-                // TODO, handle the Addresses / Variants case
-                let rules_or_literals_for_selector =
-                  rhs_for_select(&self.tasks, entry.subject_type(), &select);
-                if rules_or_literals_for_selector.is_empty() {
-                  mark_unfulfillable(
-                    &mut unfulfillable_rules,
-                    &entry,
-                    entry.subject_type(),
-                    format!("no matches for {}", selector_str(selector)),
-                  );
-                  was_unfulfillable = true;
-                  continue;
-                }
-                add_rules_to_graph(
-                  &mut rules_to_traverse,
-                  &mut rule_dependency_edges,
-                  &mut unfulfillable_rules,
-                  &mut root_rule_dependency_edges,
-                  &entry,
-                  SelectKey::JustSelect(select.clone()),
-                  rules_or_literals_for_selector,
-                );
-              }
-              &Selector::SelectDependencies(SelectDependencies {
-                                              ref product,
-                                              ref dep_product,
-                                              ref field_types,
-                                              ..
-                                            }) |
-              &Selector::SelectTransitive(SelectTransitive {
-                                            ref product,
-                                            ref dep_product,
-                                            ref field_types,
-                                            ..
-                                          }) => {
-                let initial_selector = *dep_product;
-                let initial_rules_or_literals = rhs_for_select(
-                  &self.tasks,
-                  entry.subject_type(),
-                  &Select::without_variant(initial_selector),
-                );
-                if initial_rules_or_literals.is_empty() {
-                  mark_unfulfillable(
-                    &mut unfulfillable_rules,
-                    &entry,
-                    entry.subject_type(),
-                    format!(
-                      "no matches for {} when resolving {}",
-                      selector_str(&Selector::Select(Select::without_variant(initial_selector))),
-                      selector_str(selector)
-                    ),
-                  );
-                  was_unfulfillable = true;
-                  continue;
-                }
-                let mut rules_for_dependencies = vec![];
-                for field_type in field_types {
-                  let rules_for_field_subjects = rhs_for_select(
-                    &self.tasks,
-                    field_type.clone(),
-                    &Select {
-                      product: *product,
-                      variant_key: None,
-                    },
-                  );
-                  rules_for_dependencies.extend(rules_for_field_subjects);
-                }
-                if rules_for_dependencies.is_empty() {
-                  for t in field_types {
-                    mark_unfulfillable(
-                      &mut unfulfillable_rules,
-                      &entry,
-                      t.clone(),
-                      format!(
-                        "no matches for {} when resolving {}",
-                        selector_str(&Selector::Select(Select::without_variant(*product))),
-                        selector_str(selector)
-                      ),
-                    );
-                  }
-                  was_unfulfillable = true;
-                  continue;
-                }
-                add_rules_to_graph(
-                  &mut rules_to_traverse,
-                  &mut rule_dependency_edges,
-                  &mut unfulfillable_rules,
-                  &mut root_rule_dependency_edges,
-                  &entry,
-                  SelectKey::NestedSelect(selector.clone(), Select::without_variant(*dep_product)),
-                  initial_rules_or_literals,
-                );
-
-                add_rules_to_graph(
-                  &mut rules_to_traverse,
-                  &mut rule_dependency_edges,
-                  &mut unfulfillable_rules,
-                  &mut root_rule_dependency_edges,
-                  &entry,
-                  SelectKey::ProjectedMultipleNestedSelect(
-                    selector.clone(),
-                    field_types.clone(),
-                    Select::without_variant(*product),
-                  ),
-                  rules_for_dependencies,
-                );
-              }
-              &Selector::SelectProjection(ref select) => {
-                let initial_selector = select.input_product;
-                let initial_rules_or_literals = rhs_for_select(
-                  &self.tasks,
-                  entry.subject_type(),
-                  &Select {
-                    product: initial_selector,
-                    variant_key: None,
-                  },
-                );
-                if initial_rules_or_literals.is_empty() {
-                  mark_unfulfillable(
-                    &mut unfulfillable_rules,
-                    &entry,
-                    entry.subject_type(),
-                    format!(
-                      "no matches for {} when resolving {}",
-                      selector_str(&Selector::Select(Select::without_variant(initial_selector))),
-                      selector_str(selector)
-                    ),
-                  );
-                  was_unfulfillable = true;
-                  continue;
-                }
-
-                let projected_rules_or_literals = rhs_for_select(
-                  &self.tasks,
-                  select.projected_subject,
-                  &Select::without_variant(select.product),
-                );
-                if projected_rules_or_literals.is_empty() {
-                  mark_unfulfillable(
-                    &mut unfulfillable_rules,
-                    &entry,
-                    select.projected_subject,
-                    format!(
-                      "no matches for {} when resolving {}",
-                      selector_str(&Selector::Select(Select::without_variant(select.product))),
-                      selector_str(selector)
-                    ),
-                  );
-                  was_unfulfillable = true;
-                  continue;
-
-                }
-                add_rules_to_graph(
-                  &mut rules_to_traverse,
-                  &mut rule_dependency_edges,
-                  &mut unfulfillable_rules,
-                  &mut root_rule_dependency_edges,
-                  &entry,
-                  SelectKey::NestedSelect(
-                    selector.clone(),
-                    Select::without_variant(initial_selector),
-                  ),
-                  initial_rules_or_literals,
-                );
-                add_rules_to_graph(
-                  &mut rules_to_traverse,
-                  &mut rule_dependency_edges,
-                  &mut unfulfillable_rules,
-                  &mut root_rule_dependency_edges,
-                  &entry,
-                  SelectKey::ProjectedNestedSelect(
-                    selector.clone(),
-                    select.projected_subject,
-                    Select::without_variant(select.product),
-                  ),
-                  projected_rules_or_literals,
-                );
-              }
-            }
-          }
-        }
+      let clause = match entry {
+        Entry::InnerEntry(InnerEntry { ref rule, .. }) => rule.clause.clone(),
+        Entry::Root(RootEntry { ref clause, .. }) => clause.clone(),
         _ => {
           panic!(
             "Entry type that cannot dependencies was not filtered out {:?}",
             entry
           )
         }
+      };
+
+      for selector in clause.iter() {
+        match selector {
+          &Selector::Select(ref select) => {
+            // TODO, handle the Addresses / Variants case
+            let rules_or_literals_for_selector =
+              rhs_for_select(&self.tasks, entry.subject_type(), &select);
+            if rules_or_literals_for_selector.is_empty() {
+              mark_unfulfillable(
+                &mut unfulfillable_rules,
+                &entry,
+                entry.subject_type(),
+                format!("no matches for {}", selector_str(selector)),
+              );
+              was_unfulfillable = true;
+              continue;
+            }
+            add_rules_to_graph(
+              &mut rules_to_traverse,
+              &mut rule_dependency_edges,
+              &mut unfulfillable_rules,
+              &mut root_rule_dependency_edges,
+              &entry,
+              SelectKey::JustSelect(select.clone()),
+              rules_or_literals_for_selector,
+            );
+          }
+          &Selector::SelectDependencies(SelectDependencies {
+                                          ref product,
+                                          ref dep_product,
+                                          ref field_types,
+                                          ..
+                                        }) |
+          &Selector::SelectTransitive(SelectTransitive {
+                                        ref product,
+                                        ref dep_product,
+                                        ref field_types,
+                                        ..
+                                      }) => {
+            let initial_selector = *dep_product;
+            let initial_rules_or_literals = rhs_for_select(
+              &self.tasks,
+              entry.subject_type(),
+              &Select::without_variant(initial_selector),
+            );
+            if initial_rules_or_literals.is_empty() {
+              mark_unfulfillable(
+                &mut unfulfillable_rules,
+                &entry,
+                entry.subject_type(),
+                format!(
+                  "no matches for {} when resolving {}",
+                  selector_str(&Selector::Select(Select::without_variant(initial_selector))),
+                  selector_str(selector)
+                ),
+              );
+              was_unfulfillable = true;
+              continue;
+            }
+            let mut rules_for_dependencies = vec![];
+            for field_type in field_types {
+              let rules_for_field_subjects = rhs_for_select(
+                &self.tasks,
+                field_type.clone(),
+                &Select {
+                  product: *product,
+                  variant_key: None,
+                },
+              );
+              rules_for_dependencies.extend(rules_for_field_subjects);
+            }
+            if rules_for_dependencies.is_empty() {
+              for t in field_types {
+                mark_unfulfillable(
+                  &mut unfulfillable_rules,
+                  &entry,
+                  t.clone(),
+                  format!(
+                    "no matches for {} when resolving {}",
+                    selector_str(&Selector::Select(Select::without_variant(*product))),
+                    selector_str(selector)
+                  ),
+                );
+              }
+              was_unfulfillable = true;
+              continue;
+            }
+            add_rules_to_graph(
+              &mut rules_to_traverse,
+              &mut rule_dependency_edges,
+              &mut unfulfillable_rules,
+              &mut root_rule_dependency_edges,
+              &entry,
+              SelectKey::NestedSelect(selector.clone(), Select::without_variant(*dep_product)),
+              initial_rules_or_literals,
+            );
+
+            add_rules_to_graph(
+              &mut rules_to_traverse,
+              &mut rule_dependency_edges,
+              &mut unfulfillable_rules,
+              &mut root_rule_dependency_edges,
+              &entry,
+              SelectKey::ProjectedMultipleNestedSelect(
+                selector.clone(),
+                field_types.clone(),
+                Select::without_variant(*product),
+              ),
+              rules_for_dependencies,
+            );
+          }
+          &Selector::SelectProjection(ref select) => {
+            let initial_selector = select.input_product;
+            let initial_rules_or_literals = rhs_for_select(
+              &self.tasks,
+              entry.subject_type(),
+              &Select {
+                product: initial_selector,
+                variant_key: None,
+              },
+            );
+            if initial_rules_or_literals.is_empty() {
+              mark_unfulfillable(
+                &mut unfulfillable_rules,
+                &entry,
+                entry.subject_type(),
+                format!(
+                  "no matches for {} when resolving {}",
+                  selector_str(&Selector::Select(Select::without_variant(initial_selector))),
+                  selector_str(selector)
+                ),
+              );
+              was_unfulfillable = true;
+              continue;
+            }
+
+            let projected_rules_or_literals = rhs_for_select(
+              &self.tasks,
+              select.projected_subject,
+              &Select::without_variant(select.product),
+            );
+            if projected_rules_or_literals.is_empty() {
+              mark_unfulfillable(
+                &mut unfulfillable_rules,
+                &entry,
+                select.projected_subject,
+                format!(
+                  "no matches for {} when resolving {}",
+                  selector_str(&Selector::Select(Select::without_variant(select.product))),
+                  selector_str(selector)
+                ),
+              );
+              was_unfulfillable = true;
+              continue;
+
+            }
+            add_rules_to_graph(
+              &mut rules_to_traverse,
+              &mut rule_dependency_edges,
+              &mut unfulfillable_rules,
+              &mut root_rule_dependency_edges,
+              &entry,
+              SelectKey::NestedSelect(selector.clone(), Select::without_variant(initial_selector)),
+              initial_rules_or_literals,
+            );
+            add_rules_to_graph(
+              &mut rules_to_traverse,
+              &mut rule_dependency_edges,
+              &mut unfulfillable_rules,
+              &mut root_rule_dependency_edges,
+              &entry,
+              SelectKey::ProjectedNestedSelect(
+                selector.clone(),
+                select.projected_subject,
+                Select::without_variant(select.product),
+              ),
+              projected_rules_or_literals,
+            );
+          }
+        }
       }
+
       // TODO handle snapshot rules
       if !was_unfulfillable {
         // NB: In this case there were no selectors
@@ -808,7 +805,7 @@ impl RuleGraph {
     )
   }
 
-  pub fn task_for_inner(&self, entry: &Entry) -> Task {
+  pub fn task_for_inner(&self, entry: &Entry) -> Arc<Task> {
     if let &Entry::InnerEntry(ref inner) = entry {
       inner.rule.clone()
     } else {
@@ -841,7 +838,7 @@ impl RuleGraph {
 
   fn build_error_msg(&self) -> String {
     // TODO the rule display is really unfriendly right now. Next up should be to improve it.
-    let mut collated_errors: HashMap<Task, HashMap<String, HashSet<TypeId>>> = HashMap::new();
+    let mut collated_errors: HashMap<Arc<Task>, HashMap<String, HashSet<TypeId>>> = HashMap::new();
 
     let used_rules: HashSet<_> = self
       .rule_dependency_edges
@@ -1091,7 +1088,7 @@ fn rhs_for_select(tasks: &Tasks, subject_type: TypeId, select: &Select) -> Entri
       Some(ref matching_tasks) => {
         matching_tasks
           .iter()
-          .map(|t| Entry::new_inner(subject_type, t))
+          .map(|t| Entry::new_inner(subject_type, t.clone()))
           .collect()
       }
       None => vec![],

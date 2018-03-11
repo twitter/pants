@@ -1058,7 +1058,7 @@ pub struct Task {
   subject: Key,
   product: TypeConstraint,
   variants: Variants,
-  task: tasks::Task,
+  task: Arc<tasks::Task>,
   entry: rule_graph::Entry,
 }
 
