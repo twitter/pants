@@ -35,14 +35,18 @@ class PathGlobs(datatype('PathGlobs', ['include', 'exclude'])):
   """A wrapper around sets of filespecs to include and exclude.
 
   The syntax supported is roughly git's glob syntax.
+
+  :param included: A list of filespecs to include.
+  :param excluded: A list of filespecs to exclude.
   """
+
+  def __new__(cls, include, exclude=tuple()):
+    return super(PathGlobs, cls).__new__(cls, include, exclude)
 
   @staticmethod
   def create(relative_to, include, exclude=tuple()):
     """Given various file patterns create a PathGlobs object (without using filesystem operations).
 
-    :param relative_to: The path that all patterns are relative to (which will itself be relative
-      to the buildroot).
     :param included: A list of filespecs to include.
     :param excluded: A list of filespecs to exclude.
     :rtype: :class:`PathGlobs`

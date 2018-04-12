@@ -53,8 +53,9 @@ def rule(output_type, input_selectors):
     def resolve_type(name):
       resolved = caller_frame.f_globals.get(name) or caller_frame.f_builtins.get(name)
       if not isinstance(resolved, (TypeType, Exactly)):
+        diag = 'of type: {}'.format(type(resolved)) if resolved else 'which could not be resolved'
         raise ValueError('Expected either a `type` constructor or TypeConstraint instance; '
-                         'got: {}'.format(name))
+                         'got: {} ({}).'.format(name, diag))
       return resolved
 
     gets = []

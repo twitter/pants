@@ -54,7 +54,12 @@ class TargetAdaptor(StructWithDeps):
         return tuple()
       base_globs = BaseGlobs.from_sources_field(sources, self.address.spec_path)
       path_globs = base_globs.to_path_globs(self.address.spec_path)
-      return (SourcesField(self.address, 'sources', base_globs.filespecs, path_globs),)
+      sources_cls = self.default_sources_cls
+      return (sources_cls(self.address, 'sources', base_globs.filespecs, path_globs),)
+
+  @property
+  def default_sources_cls(self):
+    return SourcesField
 
   @property
   def default_sources_globs(self):
@@ -94,6 +99,10 @@ class SourcesField(datatype('SourcesField', ['address', 'arg', 'filespecs', 'pat
     return 'SourcesField(address={}, arg={}, filespecs={!r})'.format(self.address, self.arg, self.filespecs)
 
 
+class ScalaSourcesField(SourcesField):
+  pass
+
+
 class JavaLibraryAdaptor(TargetAdaptor):
   @property
   def default_sources_globs(self):
@@ -105,6 +114,9 @@ class JavaLibraryAdaptor(TargetAdaptor):
 
 
 class ScalaLibraryAdaptor(TargetAdaptor):
+  # TODO: JunitTestsAdaptor would need adjustment as well.
+  default_sources_cls = ScalaSourcesField
+
   @property
   def default_sources_globs(self):
     return ('*.scala',)

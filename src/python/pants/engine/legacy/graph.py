@@ -20,8 +20,10 @@ from pants.build_graph.address_lookup_error import AddressLookupError
 from pants.build_graph.build_graph import BuildGraph
 from pants.build_graph.remote_sources import RemoteSources
 from pants.engine.addressable import BuildFileAddresses
+from pants.engine.dep_inference import JVMImports, JVMPackageName
 from pants.engine.fs import PathGlobs, Snapshot
-from pants.engine.legacy.structs import BundleAdaptor, BundlesField, SourcesField, TargetAdaptor
+from pants.engine.legacy.structs import (BundleAdaptor, BundlesField, ScalaSourcesField,
+                                         SourcesField, TargetAdaptor)
 from pants.engine.rules import TaskRule, rule
 from pants.engine.selectors import Get, Select, SelectDependencies
 from pants.source.wrapped_globs import EagerFilesetWithSpec, FilesetRelPathWrapper
@@ -338,8 +340,12 @@ def hydrated_targets(build_file_addresses):
   yield HydratedTargets(targets)
 
 
-class HydratedField(datatype('HydratedField', ['name', 'value'])):
-  """A wrapper for a fully constructed replacement kwarg for a HydratedTarget."""
+class HydratedField(datatype('HydratedField', ['name', 'value', 'dependencies'])):
+  """A wrapper for a fully constructed replacement kwarg for a HydratedTarget.
+
+  Experimentally supports declaring additional dependencies for the field, which are
+  merged with the explicitly declared dependencies of a HydratedTarget.
+  """
 
 
 def hydrate_target(target_adaptor, hydrated_fields):
@@ -376,7 +382,20 @@ def hydrate_sources(sources_field):
   fileset_with_spec = _eager_fileset_with_spec(sources_field.address.spec_path,
                                                sources_field.filespecs,
                                                snapshot)
-  yield HydratedField(sources_field.arg, fileset_with_spec)
+  yield HydratedField(sources_field.arg, fileset_with_spec, tuple())
+
+
+@rule(HydratedField, [Select(ScalaSourcesField)])
+def hydrate_scala_sources(sources_field):
+  """Given a ScalaSourcesField, request a Snapshot for its path_globs and create an EagerFilesetWithSpec."""
+
+  snapshot = yield Get(Snapshot, PathGlobs, sources_field.path_globs)
+  jvm_imports = yield Get(JVMImports, Snapshot, snapshot)
+  dependencies = yield [Get(Address, JVMPackageName, i) for i in jvm_imports.dependencies]
+  fileset_with_spec = _eager_fileset_with_spec(sources_field.address.spec_path,
+                                               sources_field.filespecs,
+                                               snapshot)
+  yield HydratedField(sources_field.arg, fileset_with_spec, dependencies)
 
 
 @rule(HydratedField, [Select(BundlesField)])
@@ -399,7 +418,7 @@ def hydrate_bundles(bundles_field):
                                                  snapshot,
                                                  include_dirs=True)
     bundles.append(BundleAdaptor(**kwargs))
-  yield HydratedField('bundles', bundles)
+  yield HydratedField('bundles', bundles, tuple())
 
 
 def create_legacy_graph_tasks(symbol_table):
@@ -415,9 +434,10 @@ def create_legacy_graph_tasks(symbol_table):
        SelectDependencies(HydratedField,
                           symbol_table_constraint,
                           'field_adaptors',
-                          field_types=(SourcesField, BundlesField,))],
+                          field_types=(ScalaSourcesField, SourcesField, BundlesField,))],
       hydrate_target
     ),
     hydrate_sources,
+    hydrate_scala_sources,
     hydrate_bundles,
   ]

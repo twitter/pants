@@ -12,6 +12,7 @@ from pants.base.build_environment import get_buildroot, get_scm
 from pants.base.file_system_project_tree import FileSystemProjectTree
 from pants.base.specs import Specs
 from pants.engine.build_files import create_graph_rules
+from pants.engine.dep_inference import SourceRoots, create_dep_inference_rules
 from pants.engine.fs import create_fs_rules
 from pants.engine.isolated_process import create_process_rules
 from pants.engine.legacy.address_mapper import LegacyAddressMapper
@@ -25,6 +26,7 @@ from pants.engine.legacy.structs import (GoTargetAdaptor, JavaLibraryAdaptor, Ju
 from pants.engine.mapper import AddressMapper
 from pants.engine.native import Native
 from pants.engine.parser import SymbolTable
+from pants.engine.rules import SingletonRule
 from pants.engine.scheduler import LocalScheduler
 from pants.init.options_initializer import OptionsInitializer
 from pants.option.options_bootstrapper import OptionsBootstrapper
@@ -174,6 +176,10 @@ class EngineInitializer(object):
       create_fs_rules() +
       create_graph_rules(address_mapper, symbol_table) +
       create_process_rules()
+    ) + (
+      # TODO: Hardcoded.
+      create_dep_inference_rules() + 
+      [SingletonRule(SourceRoots, SourceRoots(('src/java', 'src/scala')))]
     )
 
     scheduler = LocalScheduler(workdir, dict(), tasks, project_tree, native, include_trace_on_error=include_trace_on_error)

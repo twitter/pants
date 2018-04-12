@@ -8,17 +8,16 @@ from __future__ import (absolute_import, division, generators, nested_scopes, pr
 import functools
 import re
 from abc import abstractmethod
-from os import sep as os_sep
 from os.path import join as os_path_join
 
 from pants.base.exceptions import TaskError
 from pants.base.file_system_project_tree import FileSystemProjectTree
-from pants.base.project_tree import Dir
 from pants.build_graph.address import Address
 from pants.engine.addressable import BuildFileAddresses, SubclassesOf, addressable_list
 from pants.engine.build_files import create_graph_rules
+from pants.engine.dep_inference import JVMPackageName, SourceRoots, create_dep_inference_rules
 from pants.engine.fs import FilesContent, PathGlobs, Snapshot, create_fs_rules
-from pants.engine.mapper import AddressFamily, AddressMapper
+from pants.engine.mapper import AddressMapper
 from pants.engine.parser import SymbolTable
 from pants.engine.rules import SingletonRule, TaskRule, rule
 from pants.engine.scheduler import LocalScheduler
@@ -90,41 +89,6 @@ class ResourceSources(Sources):
 class ScalaInferredDepsSources(Sources):
   """A Sources subclass which can be converted to ScalaSources via dep inference."""
   extensions = ('.scala',)
-
-
-class JVMPackageName(datatype('JVMPackageName', ['name'])):
-  """A typedef to represent a fully qualified JVM package name."""
-  pass
-
-
-class SourceRoots(datatype('SourceRoots', ['srcroots'])):
-  """Placeholder for the SourceRoot subsystem."""
-
-
-@printing_func
-@rule(Address,
-      [Select(JVMPackageName),
-       SelectDependencies(AddressFamily, Snapshot, field='dir_stats', field_types=(Dir,))])
-def select_package_address(jvm_package_name, address_families):
-  """Return the Address from the given AddressFamilies which provides the given package."""
-  addresses = [address for address_family in address_families
-                       for address in address_family.addressables.keys()]
-  if len(addresses) == 0:
-    raise ValueError('No targets existed in {} to provide {}'.format(
-      address_families, jvm_package_name))
-  elif len(addresses) > 1:
-    raise ValueError('Multiple targets might be able to provide {}:\n  {}'.format(
-      jvm_package_name, '\n  '.join(str(a) for a in addresses)))
-  return addresses[0].to_address()
-
-
-@printing_func
-@rule(PathGlobs, [Select(JVMPackageName), Select(SourceRoots)])
-def calculate_package_search_path(jvm_package_name, source_roots):
-  """Return PathGlobs to match directories where the given JVMPackageName might exist."""
-  rel_package_dir = jvm_package_name.name.replace('.', os_sep)
-  specs = [os_path_join(srcroot, rel_package_dir) for srcroot in source_roots.srcroots]
-  return PathGlobs.create('', include=specs)
 
 
 @printing_func
@@ -458,8 +422,6 @@ def setup_json_scheduler(build_root, native):
     ] + [
       # scala dependency inference
       reify_scala_sources,
-      select_package_address,
-      calculate_package_search_path,
       SingletonRule(SourceRoots, SourceRoots(('src/java','src/scala'))),
     ] + [
       # Remote dependency resolution
@@ -472,9 +434,9 @@ def setup_json_scheduler(build_root, native):
       javac,
       scalac,
     ] + (
-      create_graph_rules(address_mapper, symbol_table)
-    ) + (
-      create_fs_rules()
+      create_graph_rules(address_mapper, symbol_table) +
+      create_fs_rules() +
+      create_dep_inference_rules()
     )
 
   return LocalScheduler(work_dir,
