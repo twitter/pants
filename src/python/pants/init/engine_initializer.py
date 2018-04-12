@@ -10,6 +10,7 @@ from builtins import object
 from pants.backend.docgen.targets.doc import Page
 from pants.backend.jvm.targets.jvm_app import JvmApp
 from pants.backend.jvm.targets.jvm_binary import JvmBinary
+from pants.backend.jvm.targets.scala_library import ScalaLibrary
 from pants.backend.python.rules.python_test_runner import run_python_test
 from pants.backend.python.targets.python_app import PythonApp
 from pants.backend.python.targets.python_binary import PythonBinary
@@ -30,7 +31,7 @@ from pants.engine.legacy.parser import LegacyPythonCallbacksParser
 from pants.engine.legacy.structs import (AppAdaptor, JvmBinaryAdaptor, PageAdaptor,
                                          PantsPluginAdaptor, PythonBinaryAdaptor,
                                          PythonTargetAdaptor, PythonTestsAdaptor,
-                                         RemoteSourcesAdaptor, TargetAdaptor)
+                                         RemoteSourcesAdaptor, ScalaLibraryAdaptor, TargetAdaptor)
 from pants.engine.mapper import AddressMapper
 from pants.engine.native import Native
 from pants.engine.parser import SymbolTable
@@ -79,6 +80,7 @@ class LegacySymbolTable(SymbolTable):
     # These should likely move onto Target subclasses as the engine gets deeper into beta
     # territory.
     self._table['python_library'] = self._make_target_adaptor(PythonTargetAdaptor, PythonLibrary)
+    self._table['scala_library'] = self._make_target_adaptor(ScalaLibraryAdaptor, ScalaLibrary)
 
     self._table['jvm_app'] = self._make_target_adaptor(AppAdaptor, JvmApp)
     self._table['jvm_binary'] = self._make_target_adaptor(JvmBinaryAdaptor, JvmBinary)

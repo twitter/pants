@@ -91,8 +91,8 @@ class TargetAdaptor(StructWithDeps):
         return tuple()
       base_globs = BaseGlobs.from_sources_field(sources, self.address.spec_path)
       path_globs = base_globs.to_path_globs(self.address.spec_path, conjunction)
-
-      return (SourcesField(
+      sources_cls = self.default_sources_cls
+      return (sources_cls(
         self.address,
         'sources',
         base_globs.filespecs,
@@ -100,6 +100,10 @@ class TargetAdaptor(StructWithDeps):
         path_globs,
         self.validate_sources,
       ),)
+
+  @property
+  def default_sources_cls(self):
+    return SourcesField
 
   @property
   def default_sources_globs(self):
@@ -180,6 +184,15 @@ class PageAdaptor(TargetAdaptor):
           ', '.join(sources.files),
         )
       )
+
+
+class ScalaSourcesField(SourcesField):
+  pass
+
+
+class ScalaLibraryAdaptor(TargetAdaptor):
+  # TODO: JunitTestsAdaptor would need adjustment as well.
+  default_sources_cls = ScalaSourcesField
 
 
 class BundlesField(datatype(['address', 'bundles', 'filespecs_list', 'path_globs_list']), Field):

@@ -421,3 +421,20 @@ class Collection(object):
 
   def __iter__(self):
     return iter(self.dependencies)
+
+
+class Optional(object):
+  """Constructs classes representing optional objects of a particular type."""
+
+  @classmethod
+  @memoized
+  def of(cls, element_type):
+    type_name = b'{}.of({})'.format(cls.__name__, element_type.__name__)
+    supertypes = (cls, datatype(['value']))
+    properties = {'element_type': element_type}
+    optional_of_type = type(type_name, supertypes, properties)
+
+    # Expose the custom class type at the module level to be pickle compatible.
+    setattr(sys.modules[cls.__module__], type_name, optional_of_type)
+
+    return optional_of_type

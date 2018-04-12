@@ -91,9 +91,9 @@ def _make_rule(output_type, input_selectors, for_goal=None, cacheable=True):
     def resolve_type(name):
       resolved = caller_frame.f_globals.get(name) or caller_frame.f_builtins.get(name)
       if not isinstance(resolved, (type, Exactly)):
-        # TODO: should this say "...or Exactly instance;"?
+        diag = 'of type: {}'.format(type(resolved)) if resolved else 'which could not be resolved'
         raise ValueError('Expected either a `type` constructor or TypeConstraint instance; '
-                         'got: {}'.format(name))
+                         'got: {} ({}).'.format(name, diag))
       return resolved
 
     gets = OrderedSet()

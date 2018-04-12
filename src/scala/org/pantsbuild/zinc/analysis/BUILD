@@ -11,8 +11,8 @@ scala_library(
   dependencies=[
     '3rdparty/jvm/org/scala-lang/modules:scala-java8-compat',
     '3rdparty/jvm/org/scala-sbt:zinc',
-    'src/scala/org/pantsbuild/zinc/cache',
-    'src/scala/org/pantsbuild/zinc/util',
+    #'src/scala/org/pantsbuild/zinc/cache',
+    #'src/scala/org/pantsbuild/zinc/util',
   ],
   exports=[
     'src/scala/org/pantsbuild/zinc/cache',

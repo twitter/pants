@@ -8,6 +8,7 @@ from pants.backend.jvm.artifact import Artifact
 from pants.backend.jvm.ossrh_publication_metadata import (Developer, License,
                                                           OSSRHPublicationMetadata, Scm)
 from pants.backend.jvm.repository import Repository as repo
+from pants.backend.jvm.rules.dep_inference import create_dep_inference_rules
 from pants.backend.jvm.scala_artifact import ScalaArtifact
 from pants.backend.jvm.subsystems.jar_dependency_management import JarDependencyManagementSetup
 from pants.backend.jvm.subsystems.scala_platform import ScalaPlatform
@@ -140,6 +141,10 @@ def build_file_aliases():
 
 def global_subsystems():
   return (ScalaPlatform,)
+
+
+def rules():
+  return create_dep_inference_rules()
 
 
 # TODO https://github.com/pantsbuild/pants/issues/604 register_goals

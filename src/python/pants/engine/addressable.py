@@ -13,10 +13,11 @@ from future.utils import string_types
 
 from pants.build_graph.address import Address, BuildFileAddress
 from pants.engine.objects import Resolvable, Serializable
-from pants.util.objects import Collection, TypeConstraintError
+from pants.util.objects import Collection, Optional, TypeConstraintError
 
 
 Addresses = Collection.of(Address)
+OptionalAddress = Optional.of(Address)
 
 
 class BuildFileAddresses(Collection.of(BuildFileAddress)):

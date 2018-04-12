@@ -1,0 +1,9 @@
+python_library(
+  dependencies=[
+    'src/python/pants/build_graph',
+    'src/python/pants/engine:fs',
+    'src/python/pants/engine:isolated_process',
+    'src/python/pants/engine:selectors',
+    'src/python/pants/util:objects',
+  ],
+)

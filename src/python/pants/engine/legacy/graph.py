@@ -25,7 +25,8 @@ from pants.build_graph.remote_sources import RemoteSources
 from pants.engine.addressable import BuildFileAddresses
 from pants.engine.fs import PathGlobs, Snapshot
 from pants.engine.legacy.address_mapper import LegacyAddressMapper
-from pants.engine.legacy.structs import BundleAdaptor, BundlesField, SourcesField, TargetAdaptor
+from pants.engine.legacy.structs import (BundleAdaptor, BundlesField, ScalaSourcesField,
+                                         SourcesField, TargetAdaptor)
 from pants.engine.mapper import AddressMapper
 from pants.engine.rules import RootRule, TaskRule, rule
 from pants.engine.selectors import Get, Select
@@ -492,23 +493,44 @@ def hydrated_targets(build_file_addresses):
   yield HydratedTargets(targets)
 
 
-class HydratedField(datatype(['name', 'value'])):
-  """A wrapper for a fully constructed replacement kwarg for a HydratedTarget."""
+class HydratedField(datatype(['name', 'value', 'dependencies'])):
+  """A wrapper for a fully constructed replacement kwarg for a HydratedTarget.
+
+  Experimentally supports declaring additional dependencies for the field, which are
+  merged with the explicitly declared dependencies of a HydratedTarget.
+  """
 
 
 def hydrate_target(target_adaptor):
   """Construct a HydratedTarget from a TargetAdaptor and hydrated versions of its adapted fields."""
   # Hydrate the fields of the adaptor and re-construct it.
-  hydrated_fields = yield [(Get(HydratedField, BundlesField, fa)
-                            if type(fa) is BundlesField
-                            else Get(HydratedField, SourcesField, fa))
-                           for fa in target_adaptor.field_adaptors]
+  def hydrated(fa):
+    if type(fa) is BundlesField:
+      return Get(HydratedField, BundlesField, fa)
+    elif type(fa) is SourcesField:
+      return Get(HydratedField, SourcesField, fa)
+    elif type(fa) is ScalaSourcesField:
+      return Get(HydratedField, ScalaSourcesField, fa)
+    else:
+      raise Exception('Unrecognized FieldAdaptor type: {}'.format(type(fa)))
+  hydrated_fields = yield [hydrated(fa) for fa in target_adaptor.field_adaptors]
+
+  # Merge dependencies explicitly declared on the target and by its Fields.
+  dependencies = list(target_adaptor.dependencies)
+  if any(hf.dependencies for hf in hydrated_fields):
+    included = set(dependencies)
+    for hf in hydrated_fields:
+      for dep in hf.dependencies:
+        if dep not in included and dep != target_adaptor.address:
+          included.add(dep)
+          dependencies.append(dep)
   kwargs = target_adaptor.kwargs()
+  kwargs['dependencies'] = dependencies
   for field in hydrated_fields:
     kwargs[field.name] = field.value
   yield HydratedTarget(target_adaptor.address,
-                        TargetAdaptor(**kwargs),
-                        tuple(target_adaptor.dependencies))
+                       TargetAdaptor(**kwargs),
+                       tuple(dependencies))
 
 
 def _eager_fileset_with_spec(spec_path, filespec, snapshot, include_dirs=False):
@@ -538,7 +560,7 @@ def hydrate_sources(sources_field, glob_match_error_behavior):
     sources_field.filespecs,
     snapshot)
   sources_field.validate_fn(fileset_with_spec)
-  yield HydratedField(sources_field.arg, fileset_with_spec)
+  yield HydratedField(sources_field.arg, fileset_with_spec, tuple())
 
 
 @rule(HydratedField, [Select(BundlesField), Select(GlobMatchErrorBehavior)])
@@ -567,7 +589,7 @@ def hydrate_bundles(bundles_field, glob_match_error_behavior):
                                                  snapshot,
                                                  include_dirs=True)
     bundles.append(BundleAdaptor(**kwargs))
-  yield HydratedField('bundles', bundles)
+  yield HydratedField('bundles', bundles, tuple())
 
 
 def create_legacy_graph_tasks(symbol_table):
@@ -587,6 +609,7 @@ def create_legacy_graph_tasks(symbol_table):
       hydrate_target,
       input_gets=[
         Get(HydratedField, SourcesField),
+        Get(HydratedField, ScalaSourcesField),
         Get(HydratedField, BundlesField),
       ]
     ),
