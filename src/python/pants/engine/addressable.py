@@ -15,10 +15,11 @@ import six
 from pants.build_graph.address import Address, BuildFileAddress
 from pants.engine.objects import Resolvable, Serializable
 from pants.util.meta import AbstractClass
-from pants.util.objects import Collection
+from pants.util.objects import Collection, Optional
 
 
 Addresses = Collection.of(Address)
+OptionalAddress = Optional.of(Address)
 
 
 class BuildFileAddresses(Collection.of(BuildFileAddress)):

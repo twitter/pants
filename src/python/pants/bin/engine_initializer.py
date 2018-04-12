@@ -179,7 +179,7 @@ class EngineInitializer(object):
     ) + (
       # TODO: Hardcoded.
       create_dep_inference_rules() + 
-      [SingletonRule(SourceRoots, SourceRoots(('src/java', 'src/scala')))]
+      [SingletonRule(SourceRoots, SourceRoots(('3rdparty/jvm', 'src/java', 'src/scala')))]
     )
 
     scheduler = LocalScheduler(workdir, dict(), tasks, project_tree, native, include_trace_on_error=include_trace_on_error)

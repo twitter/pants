@@ -6,10 +6,12 @@ from __future__ import (absolute_import, division, generators, nested_scopes, pr
                         unicode_literals, with_statement)
 
 
+import re
+
 from pants.build_graph.address import Address
+from pants.engine.addressable import OptionalAddress
 from pants.engine.mapper import AddressFamily, AddressMapper
-from pants.util.objects import datatype
-from pants.util.objects import Collection
+from pants.util.objects import datatype, Collection
 from pants.engine.rules import rule
 from pants.engine.selectors import Get, Select, SelectDependencies
 from pants.base.project_tree import Dir
@@ -31,7 +33,7 @@ class SourceRoots(datatype('SourceRoots', ['srcroots'])):
   """Placeholder for the SourceRoot subsystem."""
 
 
-@rule(Address, [Select(JVMPackageName), Select(SourceRoots)])
+@rule(OptionalAddress, [Select(JVMPackageName), Select(SourceRoots)])
 def select_package_address(jvm_package_name, source_roots):
   """Return the Address from the given AddressFamilies which provides the given package."""
 
@@ -46,12 +48,16 @@ def select_package_address(jvm_package_name, source_roots):
   addresses = [address for address_family in address_families
                        for address in address_family.addressables.keys()]
   if len(addresses) == 0:
-    raise ValueError('No targets existed in {} to provide {}'.format(
-      address_families, jvm_package_name))
-  elif len(addresses) > 1:
+    yield OptionalAddress(None)
+  if len(addresses) > 1:
     raise ValueError('Multiple targets might be able to provide {}:\n  {}'.format(
       jvm_package_name, '\n  '.join(str(a) for a in addresses)))
-  yield addresses[0].to_address()
+  yield OptionalAddress(addresses[0].to_address())
+
+
+# TODO: Represents a silly heuristic for computing a package for an import: everything up
+# to the first underscore or capitalized token is the package.
+_PACKAGE_RE = re.compile(r'^(.*?)\.[A-Z_]')
 
 
 @rule(JVMImports, [Select(Snapshot)])
@@ -64,7 +70,14 @@ def extract_imports(snapshot):
     raise Exception('Import extraction `{}` failed ({}):\n{}'.format(
       ' '.join(cmd), result.exit_code, result.stderr))
 
-  yield JVMImports(tuple(JVMPackageName(p.strip()) for p in result.stdout.splitlines()))
+  def packages():
+    matched = set()
+    for p in result.stdout.splitlines():
+      match = _PACKAGE_RE.match(p.strip())
+      if match:
+        yield JVMPackageName(match.group(1))
+
+  yield JVMImports(set(packages()))
 
 
 def create_dep_inference_rules():

@@ -19,7 +19,7 @@ from pants.build_graph.address import Address
 from pants.build_graph.address_lookup_error import AddressLookupError
 from pants.build_graph.build_graph import BuildGraph
 from pants.build_graph.remote_sources import RemoteSources
-from pants.engine.addressable import BuildFileAddresses
+from pants.engine.addressable import BuildFileAddresses, OptionalAddress
 from pants.engine.dep_inference import JVMImports, JVMPackageName
 from pants.engine.fs import PathGlobs, Snapshot
 from pants.engine.legacy.structs import (BundleAdaptor, BundlesField, ScalaSourcesField,
@@ -350,13 +350,23 @@ class HydratedField(datatype('HydratedField', ['name', 'value', 'dependencies'])
 
 def hydrate_target(target_adaptor, hydrated_fields):
   """Construct a HydratedTarget from a TargetAdaptor and hydrated versions of its adapted fields."""
+  # Merge dependencies explicitly declared on the target and by its Fields.
+  dependencies = list(target_adaptor.dependencies)
+  if any(hf.dependencies for hf in hydrated_fields):
+    included = set(dependencies)
+    for hf in hydrated_fields:
+      for dep in hf.dependencies:
+        if dep not in included:
+          included.add(dep)
+          dependencies.append(dep)
+
   # Hydrate the fields of the adaptor and re-construct it.
   kwargs = target_adaptor.kwargs()
+  kwargs['dependencies'] = dependencies
   for field in hydrated_fields:
     kwargs[field.name] = field.value
-  return HydratedTarget(target_adaptor.address,
-                        TargetAdaptor(**kwargs),
-                        tuple(target_adaptor.dependencies))
+
+  return HydratedTarget(target_adaptor.address, TargetAdaptor(**kwargs), tuple(dependencies))
 
 
 def _eager_fileset_with_spec(spec_path, filespec, snapshot, include_dirs=False):
@@ -391,7 +401,9 @@ def hydrate_scala_sources(sources_field):
 
   snapshot = yield Get(Snapshot, PathGlobs, sources_field.path_globs)
   jvm_imports = yield Get(JVMImports, Snapshot, snapshot)
-  dependencies = yield [Get(Address, JVMPackageName, i) for i in jvm_imports.dependencies]
+  optional_addresses = yield [Get(OptionalAddress, JVMPackageName, i)
+                              for i in jvm_imports.dependencies]
+  dependencies = tuple(a.value for a in optional_addresses if a.value)
   fileset_with_spec = _eager_fileset_with_spec(sources_field.address.spec_path,
                                                sources_field.filespecs,
                                                snapshot)
