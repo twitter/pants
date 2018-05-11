@@ -27,6 +27,11 @@ use tasks::{self, Intrinsic, IntrinsicKind};
 
 pub type NodeBoxFuture<T> = BoxFuture<T, Failure>;
 
+#[cfg_attr(rustfmt, rustfmt_skip)]
+trait NodeFuture<I>: Future<Item=I, Error=Failure> {}
+#[cfg_attr(rustfmt, rustfmt_skip)]
+impl<I, T> NodeFuture<I> for T where T: Future<Item=I, Error=Failure> {}
+
 fn ok<O: Send + 'static>(value: O) -> NodeBoxFuture<O> {
   future::ok(value).to_boxed()
 }
@@ -260,7 +265,11 @@ impl Select {
     }
   }
 
-  fn snapshot(&self, context: &Context, entry: &rule_graph::Entry) -> NodeBoxFuture<fs::Snapshot> {
+  fn snapshot(
+    &self,
+    context: &Context,
+    entry: &rule_graph::Entry,
+  ) -> impl NodeFuture<fs::Snapshot> {
     let ref edges = context
       .core
       .rule_graph
@@ -275,14 +284,13 @@ impl Select {
       edges,
     ).run(context.clone())
       .and_then(move |path_globs_val| context.get(Snapshot(externs::key_for(path_globs_val))))
-      .to_boxed()
   }
 
   fn execute_process(
     &self,
     context: &Context,
     entry: &rule_graph::Entry,
-  ) -> NodeBoxFuture<ProcessResult> {
+  ) -> impl NodeFuture<ProcessResult> {
     let ref edges = context
       .core
       .rule_graph
@@ -297,7 +305,6 @@ impl Select {
       edges,
     ).run(context.clone())
       .and_then(move |process_request_val| context.get(ExecuteProcess::lift(&process_request_val)))
-      .to_boxed()
   }
 
   ///
@@ -712,7 +719,7 @@ impl From<Scandir> for NodeKey {
 pub struct Snapshot(Key);
 
 impl Snapshot {
-  fn create(context: Context, path_globs: PathGlobs) -> NodeBoxFuture<fs::Snapshot> {
+  fn create(context: Context, path_globs: PathGlobs) -> impl NodeFuture<fs::Snapshot> {
     // Recursively expand PathGlobs into PathStats.
     // We rely on Context::expand tracking dependencies for scandirs,
     // and fs::Snapshot::from_path_stats tracking dependencies for file digests.
@@ -724,7 +731,6 @@ impl Snapshot {
           .map_err(move |e| format!("Snapshot failed: {}", e))
       })
       .map_err(|e| throw(&e))
-      .to_boxed()
   }
 
   fn lift_path_globs(item: &Value) -> Result<PathGlobs, String> {
@@ -807,7 +813,7 @@ impl Node for Snapshot {
 
   fn run(self, context: Context) -> NodeBoxFuture<fs::Snapshot> {
     match Self::lift_path_globs(&externs::val_for(&self.0)) {
-      Ok(pgs) => Self::create(context, pgs),
+      Ok(pgs) => Self::create(context, pgs).to_boxed(),
       Err(e) => err(throw(&format!("Failed to parse PathGlobs: {}", e))),
     }
   }
@@ -851,7 +857,7 @@ impl Task {
     context: &Context,
     entry: Arc<rule_graph::Entry>,
     gets: Vec<externs::Get>,
-  ) -> NodeBoxFuture<Vec<Value>> {
+  ) -> impl NodeFuture<Vec<Value>> {
     let get_futures = gets
       .into_iter()
       .map(|get| {
@@ -870,7 +876,7 @@ impl Task {
           .map_err(|e| was_required(e))
       })
       .collect::<Vec<_>>();
-    future::join_all(get_futures).to_boxed()
+    future::join_all(get_futures)
   }
 
   ///
@@ -881,7 +887,7 @@ impl Task {
     context: Context,
     entry: Arc<rule_graph::Entry>,
     generator: Value,
-  ) -> NodeBoxFuture<Value> {
+  ) -> impl NodeFuture<Value> {
     future::loop_fn(externs::eval("None").unwrap(), move |input| {
       let context = context.clone();
       let entry = entry.clone();
@@ -896,7 +902,7 @@ impl Task {
           externs::GeneratorResponse::Break(val) => future::ok(future::Loop::Break(val)).to_boxed(),
         }
       })
-    }).to_boxed()
+    })
   }
 }
 
@@ -923,7 +929,7 @@ impl Node for Task {
       .then(move |task_result| match task_result {
         Ok(val) => {
           if externs::satisfied_by(&context.core.types.generator, &val) {
-            Self::generate(context, entry, val)
+            Self::generate(context, entry, val).to_boxed()
           } else {
             ok(val)
           }
