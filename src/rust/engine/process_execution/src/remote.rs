@@ -2,7 +2,7 @@ use std::error::Error;
 use std::sync::Arc;
 
 use bazel_protos;
-use boxfuture::{BoxFuture, Boxable};
+use boxfuture::{BoxFuture, Boxable, IFuture};
 use bytes::Bytes;
 use digest::{Digest as DigestTrait, FixedOutput};
 use fs::Store;
@@ -199,7 +199,7 @@ impl CommandRunner {
     &self,
     command: &bazel_protos::remote_execution::Command,
     command_digest: Digest,
-  ) -> BoxFuture<(), String> {
+  ) -> impl IFuture<(), String> {
     let store = self.store.clone();
     let store2 = store.clone();
     future::done(
@@ -215,7 +215,6 @@ impl CommandRunner {
           .map_err(|e| format!("Error uploading command {:?}", e))
           .map(|_| ())
       })
-      .to_boxed()
   }
 
   fn extract_execute_response(
