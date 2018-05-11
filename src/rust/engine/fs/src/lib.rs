@@ -50,7 +50,7 @@ use glob::Pattern;
 use ignore::gitignore::{Gitignore, GitignoreBuilder};
 use indexmap::IndexMap;
 
-use boxfuture::{BoxFuture, Boxable, IFuture};
+use boxfuture::{BoxFuture, Boxable};
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub enum Stat {
@@ -421,7 +421,7 @@ impl PosixFS {
     is_ignored(&self.ignore, stat)
   }
 
-  pub fn read_file(&self, file: &File) -> impl IFuture<FileContent, io::Error> {
+  pub fn read_file(&self, file: &File) -> BoxFuture<FileContent, io::Error> {
     let path = file.path.clone();
     let path_abs = self.root.0.join(&file.path);
     self
@@ -436,9 +436,10 @@ impl PosixFS {
           })
         })
       })
+      .to_boxed()
   }
 
-  pub fn read_link(&self, link: &Link) -> impl IFuture<PathBuf, io::Error> {
+  pub fn read_link(&self, link: &Link) -> BoxFuture<PathBuf, io::Error> {
     let link_parent = link.0.parent().map(|p| p.to_owned());
     let link_abs = self.root.0.join(link.0.as_path()).to_owned();
     self
@@ -462,6 +463,7 @@ impl PosixFS {
           }
         })
       })
+      .to_boxed()
   }
 
   ///
@@ -525,22 +527,23 @@ impl PosixFS {
     PosixFS::stat_internal(relative_path, metadata.file_type(), &root, || Ok(metadata))
   }
 
-  pub fn scandir(&self, dir: &Dir) -> impl IFuture<Vec<Stat>, io::Error> {
+  pub fn scandir(&self, dir: &Dir) -> BoxFuture<Vec<Stat>, io::Error> {
     let dir = dir.to_owned();
     let root = self.root.0.clone();
     self
       .pool
       .spawn_fn(move || PosixFS::scandir_sync(root, dir))
+      .to_boxed()
   }
 }
 
 impl VFS<io::Error> for Arc<PosixFS> {
   fn read_link(&self, link: Link) -> BoxFuture<PathBuf, io::Error> {
-    PosixFS::read_link(self, &link).to_boxed()
+    PosixFS::read_link(self, &link)
   }
 
   fn scandir(&self, dir: Dir) -> BoxFuture<Vec<Stat>, io::Error> {
-    PosixFS::scandir(self, &dir).to_boxed()
+    PosixFS::scandir(self, &dir)
   }
 
   fn is_ignored(&self, stat: &Stat) -> bool {

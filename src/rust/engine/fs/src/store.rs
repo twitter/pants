@@ -1,5 +1,5 @@
 use bazel_protos;
-use boxfuture::{BoxFuture, Boxable, IFuture};
+use boxfuture::{BoxFuture, Boxable};
 use bytes::Bytes;
 use futures::{future, Future};
 use hashing::Digest;
@@ -94,12 +94,13 @@ impl Store {
     }
   }
 
-  pub fn store_file_bytes(&self, bytes: Bytes, initial_lease: bool) -> impl IFuture<Digest, String> {
+  pub fn store_file_bytes(&self, bytes: Bytes, initial_lease: bool) -> BoxFuture<Digest, String> {
     let len = bytes.len();
     self
       .local
       .store_bytes(EntryType::File, bytes, initial_lease)
       .map(move |fingerprint| Digest(fingerprint, len))
+      .to_boxed()
   }
 
   ///
@@ -122,7 +123,6 @@ impl Store {
       move |v: Bytes| Ok(f_local(v)),
       move |v: Bytes| Ok(f_remote(v)),
     )
-    .to_boxed()
   }
 
   ///
@@ -133,7 +133,7 @@ impl Store {
     &self,
     directory: &bazel_protos::remote_execution::Directory,
     initial_lease: bool,
-  ) -> impl IFuture<Digest, String> {
+  ) -> BoxFuture<Digest, String> {
     let local = self.local.clone();
     future::result(
       directory
@@ -145,6 +145,7 @@ impl Store {
         .store_bytes(EntryType::Directory, Bytes::from(bytes), initial_lease)
         .map(move |fingerprint| Digest(fingerprint, len))
     })
+      .to_boxed()
   }
 
   ///
@@ -155,7 +156,7 @@ impl Store {
   pub fn load_directory(
     &self,
     digest: Digest,
-  ) -> impl IFuture<Option<bazel_protos::remote_execution::Directory>, String> {
+  ) -> BoxFuture<Option<bazel_protos::remote_execution::Directory>, String> {
     self.load_bytes_with(
       EntryType::Directory,
       digest,
@@ -197,7 +198,7 @@ impl Store {
     digest: Digest,
     f_local: FLocal,
     f_remote: FRemote,
-  ) -> impl IFuture<Option<T>, String> {
+  ) -> BoxFuture<Option<T>, String> {
     let local = self.local.clone();
     let maybe_remote = self.remote.clone();
     self
@@ -233,6 +234,7 @@ impl Store {
             .to_boxed(),
         },
       )
+      .to_boxed()
   }
 
   ///
@@ -351,7 +353,7 @@ impl Store {
     }
   }
 
-  fn expand_directory(&self, digest: Digest) -> impl IFuture<HashMap<Digest, EntryType>, String> {
+  fn expand_directory(&self, digest: Digest) -> BoxFuture<HashMap<Digest, EntryType>, String> {
     let accumulator = Arc::new(Mutex::new(HashMap::new()));
 
     self
@@ -362,6 +364,7 @@ impl Store {
           .into_inner()
           .unwrap()
       })
+      .to_boxed()
   }
 
   fn expand_directory_helper(
@@ -449,7 +452,7 @@ impl Store {
     destination: PathBuf,
     digest: Digest,
     is_executable: bool,
-  ) -> impl IFuture<(), String> {
+  ) -> BoxFuture<(), String> {
     self
       .load_file_bytes_with(digest, move |bytes| {
         OpenOptions::new()
@@ -466,6 +469,7 @@ impl Store {
         Some(Err(e)) => Err(e.into()),
         None => Err(format!("File with digest {:?} not found", digest)),
       })
+      .to_boxed()
   }
 }
 
@@ -479,7 +483,7 @@ pub enum EntryType {
 mod local {
   use super::EntryType;
 
-  use boxfuture::IFuture;
+  use boxfuture::{BoxFuture, Boxable};
   use byteorder::{ByteOrder, LittleEndian};
   use bytes::Bytes;
   use digest::{Digest as DigestTrait, FixedOutput};
@@ -720,7 +724,7 @@ mod local {
       entry_type: EntryType,
       bytes: Bytes,
       initial_lease: bool,
-    ) -> impl IFuture<Fingerprint, String> {
+    ) -> BoxFuture<Fingerprint, String> {
       let dbs = match entry_type {
         EntryType::Directory => self.inner.directory_dbs.clone(),
         EntryType::File => self.inner.file_dbs.clone(),
@@ -760,6 +764,7 @@ mod local {
             )),
           }
         })
+        .to_boxed()
     }
 
     pub fn load_bytes_with<T: Send + 'static, F: Fn(Bytes) -> T + Send + Sync + 'static>(
@@ -767,7 +772,7 @@ mod local {
       entry_type: EntryType,
       fingerprint: Fingerprint,
       f: F,
-    ) -> impl IFuture<Option<T>, String> {
+    ) -> BoxFuture<Option<T>, String> {
       let dbs = match entry_type {
         EntryType::Directory => self.inner.directory_dbs.clone(),
         EntryType::File => self.inner.file_dbs.clone(),
@@ -790,6 +795,7 @@ mod local {
             )),
           })
         })
+        .to_boxed()
     }
   }
 

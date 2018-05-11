@@ -4,7 +4,7 @@
 extern crate tempdir;
 
 use bazel_protos;
-use boxfuture::{BoxFuture, Boxable, IFuture};
+use boxfuture::{BoxFuture, Boxable};
 use bytes::Bytes;
 use futures::Future;
 use futures::future::{self, join_all};
@@ -46,11 +46,12 @@ impl Snapshot {
     store: Store,
     file_digester: S,
     path_stats: Vec<PathStat>,
-  ) -> impl IFuture<Snapshot, String> {
+  ) -> BoxFuture<Snapshot, String> {
     let mut sorted_path_stats = path_stats.clone();
     sorted_path_stats.sort_by(|a, b| a.path().cmp(b.path()));
     Snapshot::ingest_directory_from_sorted_path_stats(store, file_digester, sorted_path_stats)
       .map(|digest| Snapshot { digest, path_stats })
+      .to_boxed()
   }
 
   fn ingest_directory_from_sorted_path_stats<
@@ -256,7 +257,7 @@ impl Snapshot {
   }
 
   // Preserves the order of Snapshot's path_stats in its returned Vec.
-  pub fn contents(self, store: Store) -> impl IFuture<Vec<FileContent>, String> {
+  pub fn contents(self, store: Store) -> BoxFuture<Vec<FileContent>, String> {
     let contents = Arc::new(Mutex::new(HashMap::new()));
     let path_stats = self.path_stats;
     Snapshot::contents_for_directory_helper(self.digest, store, PathBuf::from(""), contents.clone())
@@ -279,6 +280,7 @@ impl Snapshot {
         }
         vec
       })
+      .to_boxed()
   }
 
   // Assumes that all fingerprints it encounters are valid.
@@ -287,7 +289,7 @@ impl Snapshot {
     store: Store,
     path_so_far: PathBuf,
     contents_wrapped: Arc<Mutex<HashMap<PathBuf, Bytes>>>,
-  ) -> impl IFuture<(), String> {
+  ) -> BoxFuture<(), String> {
     store
       .load_directory(digest)
       .and_then(move |maybe_dir| {
@@ -336,6 +338,7 @@ impl Snapshot {
         file_futures.join(dir_futures)
       })
       .map(|(_, _)| ())
+      .to_boxed()
   }
 }
 
