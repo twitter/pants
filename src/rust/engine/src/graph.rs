@@ -17,21 +17,21 @@ use context::ContextFactory;
 use core::{Failure, Noop, FNV};
 use externs;
 use hashing;
-use nodes::{DigestFile, Node, NodeFuture, NodeKey, NodeResult, TryInto};
+use nodes::{DigestFile, Node, NodeBoxFuture, NodeKey, NodeResult, TryInto};
 
 // 2^32 Nodes ought to be more than enough for anyone!
 pub type EntryId = NodeIndex<u32>;
 
 type PGraph = StableDiGraph<Entry, (), u32>;
 
-type EntryStateField = future::Shared<NodeFuture<NodeResult>>;
+type EntryStateField = future::Shared<NodeBoxFuture<NodeResult>>;
 
 trait EntryStateGetter {
-  fn get<N: Node>(&self) -> NodeFuture<N::Output>;
+  fn get<N: Node>(&self) -> NodeBoxFuture<N::Output>;
 }
 
 impl EntryStateGetter for EntryStateField {
-  fn get<N: Node>(&self) -> NodeFuture<N::Output> {
+  fn get<N: Node>(&self) -> NodeBoxFuture<N::Output> {
     self
       .clone()
       .then(|node_result| Entry::unwrap::<N>(node_result))
@@ -509,7 +509,7 @@ impl Graph {
     src_id: EntryId,
     context: &ContextFactory,
     dst_node: N,
-  ) -> NodeFuture<N::Output> {
+  ) -> NodeBoxFuture<N::Output> {
     let dst_node = dst_node.into();
 
     // Get or create the destination, and then insert the dep and return its state.
@@ -544,7 +544,7 @@ impl Graph {
   ///
   /// Create the given Node if it does not already exist.
   ///
-  pub fn create<N: Node>(&self, node: N, context: &ContextFactory) -> NodeFuture<N::Output> {
+  pub fn create<N: Node>(&self, node: N, context: &ContextFactory) -> NodeBoxFuture<N::Output> {
     // Initialize the state while under the lock...
     let state = {
       let mut inner = self.inner.lock().unwrap();

@@ -25,13 +25,13 @@ use rule_graph;
 use selectors::{self, Selector};
 use tasks::{self, Intrinsic, IntrinsicKind};
 
-pub type NodeFuture<T> = BoxFuture<T, Failure>;
+pub type NodeBoxFuture<T> = BoxFuture<T, Failure>;
 
-fn ok<O: Send + 'static>(value: O) -> NodeFuture<O> {
+fn ok<O: Send + 'static>(value: O) -> NodeBoxFuture<O> {
   future::ok(value).to_boxed()
 }
 
-fn err<O: Send + 'static>(failure: Failure) -> NodeFuture<O> {
+fn err<O: Send + 'static>(failure: Failure) -> NodeBoxFuture<O> {
   future::err(failure).to_boxed()
 }
 
@@ -47,15 +47,15 @@ fn was_required(failure: Failure) -> Failure {
 }
 
 pub trait GetNode {
-  fn get<N: Node>(&self, node: N) -> NodeFuture<N::Output>;
+  fn get<N: Node>(&self, node: N) -> NodeBoxFuture<N::Output>;
 }
 
 impl VFS<Failure> for Context {
-  fn read_link(&self, link: Link) -> NodeFuture<PathBuf> {
+  fn read_link(&self, link: Link) -> NodeBoxFuture<PathBuf> {
     self.get(ReadLink(link)).map(|res| res.0).to_boxed()
   }
 
-  fn scandir(&self, dir: Dir) -> NodeFuture<Vec<fs::Stat>> {
+  fn scandir(&self, dir: Dir) -> NodeBoxFuture<Vec<fs::Stat>> {
     self.get(Scandir(dir)).map(|res| res.0).to_boxed()
   }
 
@@ -89,7 +89,7 @@ impl StoreFileByDigest<Failure> for Context {
 pub trait Node: Into<NodeKey> {
   type Output: Clone + fmt::Debug + Into<NodeResult> + TryFrom<NodeResult> + Send + 'static;
 
-  fn run(self, context: Context) -> NodeFuture<Self::Output>;
+  fn run(self, context: Context) -> NodeBoxFuture<Self::Output>;
 }
 
 ///
@@ -260,7 +260,7 @@ impl Select {
     }
   }
 
-  fn snapshot(&self, context: &Context, entry: &rule_graph::Entry) -> NodeFuture<fs::Snapshot> {
+  fn snapshot(&self, context: &Context, entry: &rule_graph::Entry) -> NodeBoxFuture<fs::Snapshot> {
     let ref edges = context
       .core
       .rule_graph
@@ -282,7 +282,7 @@ impl Select {
     &self,
     context: &Context,
     entry: &rule_graph::Entry,
-  ) -> NodeFuture<ProcessResult> {
+  ) -> NodeBoxFuture<ProcessResult> {
     let ref edges = context
       .core
       .rule_graph
@@ -304,7 +304,7 @@ impl Select {
   /// Return Futures for each Task/Node that might be able to compute the given product for the
   /// given subject and variants.
   ///
-  fn gen_nodes(&self, context: &Context) -> Vec<NodeFuture<Value>> {
+  fn gen_nodes(&self, context: &Context) -> Vec<NodeBoxFuture<Value>> {
     if let Some(&(_, ref value)) = context.core.tasks.gen_singleton(self.product()) {
       return vec![future::ok(value.clone()).to_boxed()];
     }
@@ -368,7 +368,7 @@ impl Select {
           }
         },
       )
-      .collect::<Vec<NodeFuture<Value>>>()
+      .collect::<Vec<NodeBoxFuture<Value>>>()
   }
 }
 
@@ -377,7 +377,7 @@ impl Select {
 impl Node for Select {
   type Output = Value;
 
-  fn run(self, context: Context) -> NodeFuture<Value> {
+  fn run(self, context: Context) -> NodeBoxFuture<Value> {
     // TODO add back support for variants https://github.com/pantsbuild/pants/issues/4020
 
     // If there is a variant_key, see whether it has been configured; if not, no match.
@@ -470,7 +470,7 @@ impl SelectDependencies {
     }
   }
 
-  fn get_dep(&self, context: &Context, dep_subject: Value) -> NodeFuture<Value> {
+  fn get_dep(&self, context: &Context, dep_subject: Value) -> NodeBoxFuture<Value> {
     // TODO: This method needs to consider whether the `dep_subject` is an Address,
     // and if so, attempt to parse Variants there. See:
     //   https://github.com/pantsbuild/pants/issues/4020
@@ -493,7 +493,7 @@ impl SelectDependencies {
 }
 
 impl SelectDependencies {
-  fn run(self, context: Context) -> NodeFuture<Value> {
+  fn run(self, context: Context) -> NodeBoxFuture<Value> {
     // Select the product holding the dependency list.
     Select {
       selector: selectors::Select::without_variant(self.selector.dep_product),
@@ -572,7 +572,7 @@ pub struct ProcessResult(process_execution::ExecuteProcessResult);
 impl Node for ExecuteProcess {
   type Output = ProcessResult;
 
-  fn run(self, context: Context) -> NodeFuture<ProcessResult> {
+  fn run(self, context: Context) -> NodeBoxFuture<ProcessResult> {
     let request = self.0;
     let context2 = context.clone();
     // TODO: Process pool management should likely move into the `process_execution` crate, which
@@ -615,7 +615,7 @@ pub struct LinkDest(PathBuf);
 impl Node for ReadLink {
   type Output = LinkDest;
 
-  fn run(self, context: Context) -> NodeFuture<LinkDest> {
+  fn run(self, context: Context) -> NodeBoxFuture<LinkDest> {
     let link = self.0.clone();
     context
       .core
@@ -642,7 +642,7 @@ pub struct DigestFile(pub File);
 impl Node for DigestFile {
   type Output = hashing::Digest;
 
-  fn run(self, context: Context) -> NodeFuture<hashing::Digest> {
+  fn run(self, context: Context) -> NodeBoxFuture<hashing::Digest> {
     let file = self.0.clone();
     context
       .core
@@ -685,7 +685,7 @@ pub struct DirectoryListing(Vec<fs::Stat>);
 impl Node for Scandir {
   type Output = DirectoryListing;
 
-  fn run(self, context: Context) -> NodeFuture<DirectoryListing> {
+  fn run(self, context: Context) -> NodeBoxFuture<DirectoryListing> {
     let dir = self.0.clone();
     context
       .core
@@ -712,7 +712,7 @@ impl From<Scandir> for NodeKey {
 pub struct Snapshot(Key);
 
 impl Snapshot {
-  fn create(context: Context, path_globs: PathGlobs) -> NodeFuture<fs::Snapshot> {
+  fn create(context: Context, path_globs: PathGlobs) -> NodeBoxFuture<fs::Snapshot> {
     // Recursively expand PathGlobs into PathStats.
     // We rely on Context::expand tracking dependencies for scandirs,
     // and fs::Snapshot::from_path_stats tracking dependencies for file digests.
@@ -805,7 +805,7 @@ impl Snapshot {
 impl Node for Snapshot {
   type Output = fs::Snapshot;
 
-  fn run(self, context: Context) -> NodeFuture<fs::Snapshot> {
+  fn run(self, context: Context) -> NodeBoxFuture<fs::Snapshot> {
     match Self::lift_path_globs(&externs::val_for(&self.0)) {
       Ok(pgs) => Self::create(context, pgs),
       Err(e) => err(throw(&format!("Failed to parse PathGlobs: {}", e))),
@@ -829,7 +829,7 @@ pub struct Task {
 }
 
 impl Task {
-  fn get(&self, context: &Context, selector: Selector) -> NodeFuture<Value> {
+  fn get(&self, context: &Context, selector: Selector) -> NodeBoxFuture<Value> {
     let ref edges = context
       .core
       .rule_graph
@@ -851,7 +851,7 @@ impl Task {
     context: &Context,
     entry: Arc<rule_graph::Entry>,
     gets: Vec<externs::Get>,
-  ) -> NodeFuture<Vec<Value>> {
+  ) -> NodeBoxFuture<Vec<Value>> {
     let get_futures = gets
       .into_iter()
       .map(|get| {
@@ -881,7 +881,7 @@ impl Task {
     context: Context,
     entry: Arc<rule_graph::Entry>,
     generator: Value,
-  ) -> NodeFuture<Value> {
+  ) -> NodeBoxFuture<Value> {
     future::loop_fn(externs::eval("None").unwrap(), move |input| {
       let context = context.clone();
       let entry = entry.clone();
@@ -903,7 +903,7 @@ impl Task {
 impl Node for Task {
   type Output = Value;
 
-  fn run(self, context: Context) -> NodeFuture<Value> {
+  fn run(self, context: Context) -> NodeBoxFuture<Value> {
     let deps = future::join_all(
       self
         .task
@@ -1018,7 +1018,7 @@ impl NodeKey {
 impl Node for NodeKey {
   type Output = NodeResult;
 
-  fn run(self, context: Context) -> NodeFuture<NodeResult> {
+  fn run(self, context: Context) -> NodeBoxFuture<NodeResult> {
     match self {
       NodeKey::DigestFile(n) => n.run(context).map(|v| v.into()).to_boxed(),
       NodeKey::ExecuteProcess(n) => n.run(context).map(|v| v.into()).to_boxed(),

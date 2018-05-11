@@ -10,7 +10,7 @@ use externs;
 use fs::{safe_create_dir_all_ioerror, PosixFS, ResettablePool, Store};
 use graph::{EntryId, Graph};
 use handles::maybe_drain_handles;
-use nodes::{Node, NodeFuture};
+use nodes::{Node, NodeBoxFuture};
 use rule_graph::RuleGraph;
 use tasks::Tasks;
 use types::Types;
@@ -93,7 +93,7 @@ impl Context {
   ///
   /// Get the future value for the given Node implementation.
   ///
-  pub fn get<N: Node>(&self, node: N) -> NodeFuture<N::Output> {
+  pub fn get<N: Node>(&self, node: N) -> NodeBoxFuture<N::Output> {
     // TODO: Odd place for this... could do it periodically in the background?
     maybe_drain_handles().map(|handles| {
       externs::drop_handles(handles);
