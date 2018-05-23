@@ -196,11 +196,7 @@ impl Scheduler {
   ///
   /// Compute the results for roots in the given request.
   ///
-  pub fn execute<'e>(
-    &self,
-    request: &'e ExecutionRequest,
-    session: &Session,
-  ) -> Vec<(&'e Key, &'e TypeConstraint, RootResult)> {
+  pub fn execute<'e>(&self, request: &'e ExecutionRequest, session: &Session) -> Vec<RootResult> {
     // Bootstrap tasks for the roots, and then wait for all of them.
     debug!("Launching {} roots.", request.roots.len());
 
@@ -208,16 +204,9 @@ impl Scheduler {
 
     // Wait for all roots to complete. Failure here should be impossible, because each
     // individual Future in the join was (eventually) mapped into success.
-    let results = Scheduler::execute_helper(self.core.clone(), request.roots.clone(), 8)
+    Scheduler::execute_helper(self.core.clone(), request.roots.clone(), 8)
       .wait()
-      .expect("Execution failed.");
-
-    request
-      .roots
-      .iter()
-      .zip(results.into_iter())
-      .map(|(s, r)| (&s.subject, &s.selector.product, r))
-      .collect()
+      .expect("Execution failed.")
   }
 
   pub fn capture_snapshot_from_arbitrary_root<P: AsRef<Path>>(

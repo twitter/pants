@@ -53,69 +53,17 @@ use scheduler::{ExecutionRequest, RootResult, Scheduler, Session};
 use tasks::Tasks;
 use types::Types;
 
-#[repr(C)]
-enum RawStateTag {
-  Return = 1,
-  Throw = 2,
-  Noop = 3,
-  Invalidated = 4,
-}
-
-#[repr(C)]
-pub struct RawNode {
-  subject: Key,
-  product: TypeConstraint,
-  // The Value represents a union tagged with RawStateTag.
-  state_tag: u8,
-  state_value: Value,
-}
-
-impl RawNode {
-  fn create(subject: &Key, product: &TypeConstraint, state: RootResult) -> RawNode {
-    let (state_tag, state_value) = match state {
-      Ok(v) => (RawStateTag::Return as u8, v),
-      Err(Failure::Throw(exc, _)) => (RawStateTag::Throw as u8, exc),
-      Err(Failure::Noop(noop)) => (
-        RawStateTag::Noop as u8,
-        externs::create_exception(&format!("{:?}", noop)),
-      ),
-      Err(Failure::Invalidated) => (
-        RawStateTag::Invalidated as u8,
-        externs::create_exception("Exhausted retries due to changed files."),
-      ),
-    };
-
-    RawNode {
-      subject: subject.clone(),
-      product: product.clone(),
-      state_tag: state_tag,
-      state_value: state_value,
+///
+/// Stores the given RootResult as a either a success value or a python exception.
+///
+fn store_root_result(result: RootResult) -> Value {
+  match result {
+    Ok(v) => v,
+    Err(Failure::Throw(exc, _)) => exc,
+    Err(Failure::Noop(noop)) => externs::create_exception(&format!("{:?}", noop)),
+    Err(Failure::Invalidated) => {
+      externs::create_exception("Exhausted retries due to changed files.")
     }
-  }
-}
-
-#[repr(C)]
-pub struct RawNodes {
-  nodes_ptr: *const RawNode,
-  nodes_len: u64,
-  nodes: Vec<RawNode>,
-}
-
-impl RawNodes {
-  fn create(node_states: Vec<(&Key, &TypeConstraint, RootResult)>) -> Box<RawNodes> {
-    let nodes = node_states
-      .into_iter()
-      .map(|(subject, product, state)| RawNode::create(subject, product, state))
-      .collect();
-    let mut raw_nodes = Box::new(RawNodes {
-      nodes_ptr: Vec::new().as_ptr(),
-      nodes_len: 0,
-      nodes: nodes,
-    });
-    // Creates a pointer into the struct itself, which is not possible to do in safe rust.
-    raw_nodes.nodes_ptr = raw_nodes.nodes.as_ptr();
-    raw_nodes.nodes_len = raw_nodes.nodes.len() as u64;
-    raw_nodes
   }
 }
 
@@ -291,18 +239,31 @@ pub extern "C" fn scheduler_pre_fork(scheduler_ptr: *mut Scheduler) {
   })
 }
 
+///
+/// Returns a PyResult holding a list of values corresponding to the roots of the given
+/// ExecutionRequest.
+///
 #[no_mangle]
 pub extern "C" fn scheduler_execute(
   scheduler_ptr: *mut Scheduler,
   session_ptr: *mut Session,
   execution_request_ptr: *mut ExecutionRequest,
-) -> *const RawNodes {
+) -> PyResult {
   with_scheduler(scheduler_ptr, |scheduler| {
     with_execution_request(execution_request_ptr, |execution_request| {
       with_session(session_ptr, |session| {
-        Box::into_raw(RawNodes::create(
-          scheduler.execute(execution_request, session),
-        ))
+        // TODO: This assertion is almost certainly not correct. We could somewhat-safely make this
+        // assertion by poisoning the scheduler to make it unusable after a panic?
+        let wrapped_scheduler = panic::AssertUnwindSafe(scheduler);
+        panic::catch_unwind(|| {
+          let result_values = wrapped_scheduler
+            .execute(execution_request, session)
+            .into_iter()
+            .map(store_root_result)
+            .collect::<Vec<_>>();
+          externs::store_tuple(&result_values)
+        }).map_err(|e| format!("Native engine panicked: {:?}", e))
+          .into()
       })
     })
   })
@@ -454,11 +415,6 @@ pub extern "C" fn graph_trace(
         });
     });
   });
-}
-
-#[no_mangle]
-pub extern "C" fn nodes_destroy(raw_nodes_ptr: *mut RawNodes) {
-  let _ = unsafe { Box::from_raw(raw_nodes_ptr) };
 }
 
 #[no_mangle]

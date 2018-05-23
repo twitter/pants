@@ -300,20 +300,14 @@ class Scheduler(object):
     self._native.lib.scheduler_pre_fork(self._scheduler)
 
   def _run_and_return_roots(self, session, execution_request):
-    raw_roots = self._native.lib.scheduler_execute(self._scheduler, session, execution_request)
-    try:
-      roots = []
-      for raw_root in self._native.unpack(raw_roots.nodes_ptr, raw_roots.nodes_len):
-        if raw_root.state_tag is 1:
-          state = Return(self._from_value(raw_root.state_value))
-        elif raw_root.state_tag in (2, 3, 4):
-          state = Throw(self._from_value(raw_root.state_value))
-        else:
-          raise ValueError(
-            'Unrecognized State type `{}` on: {}'.format(raw_root.state_tag, raw_root))
-        roots.append(state)
-    finally:
-      self._native.lib.nodes_destroy(raw_roots)
+    roots_py_result = self._native.lib.scheduler_execute(self._scheduler, session, execution_request)
+    roots = []
+    for root_value in self._raise_or_return(roots_py_result):
+      if isinstance(root_value, Exception):
+        state = Throw(root_value)
+      else:
+        state = Return(root_value)
+      roots.append(state)
     return roots
 
   def capture_snapshots(self, path_globs_and_roots):

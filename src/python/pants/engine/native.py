@@ -123,20 +123,6 @@ typedef void Tasks;
 typedef void Scheduler;
 typedef void Session;
 typedef void ExecutionRequest;
-
-typedef struct {
-  Key             subject;
-  TypeConstraint  product;
-  uint8_t         state_tag;
-  Value           state_value;
-} RawNode;
-
-typedef struct {
-  RawNode*  nodes_ptr;
-  uint64_t  nodes_len;
-  // NB: there are more fields in this struct, but we can safely (?)
-  // ignore them because we never have collections of this type.
-} RawNodes;
 '''
 
 CFFI_HEADERS = '''
@@ -205,7 +191,7 @@ Scheduler* scheduler_create(Tasks*,
                             TypeIdBuffer);
 void scheduler_pre_fork(Scheduler*);
 Value scheduler_metrics(Scheduler*, Session*);
-RawNodes* scheduler_execute(Scheduler*, Session*, ExecutionRequest*);
+PyResult scheduler_execute(Scheduler*, Session*, ExecutionRequest*);
 void scheduler_destroy(Scheduler*);
 
 Session* session_create(Scheduler*);
@@ -229,8 +215,6 @@ Value validator_run(Scheduler*);
 
 void rule_graph_visualize(Scheduler*, TypeIdBuffer, char*);
 void rule_subgraph_visualize(Scheduler*, TypeId, TypeConstraint, char*);
-
-void nodes_destroy(RawNodes*);
 
 void set_panic_handler(void);
 

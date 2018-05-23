@@ -56,7 +56,8 @@ fn main() {
 
   // Generate the cffi c sources.
   let build_root = BuildRoot::find().unwrap();
-  let cffi_bootstrapper = build_root.join("build-support/bin/native/bootstrap_cffi.sh");
+  let cffi_bootstrapper =
+    mark_for_change_detection(build_root.join("build-support/bin/native/bootstrap_cffi.sh"));
 
   // N.B. The filename of this source code - at generation time - must line up 1:1 with the
   // python import name, as python keys the initialization function name off of the import name.
