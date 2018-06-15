@@ -245,6 +245,25 @@ impl Scheduler {
 
     session.extend(&request.roots);
 
+    let roots = request.root_nodes();
+    let core = self.core.clone();
+    ::std::thread::spawn(move || loop {
+      let mut entries = core.graph.heavy_hitters(&roots, 32);
+      entries.sort_by(|x, y| x.0.cmp(&y.0));
+      eprintln!(
+        ">>>>>\n  {}",
+        entries
+          .into_iter()
+          .map(|(mut s, d)| {
+            s.truncate(80);
+            format!("{}.{:03}\t{}", d.as_secs(), d.subsec_nanos() / 1_000_000, s)
+          })
+          .collect::<Vec<_>>()
+          .join("\n  ")
+      );
+      ::std::thread::sleep(::std::time::Duration::from_millis(50));
+    });
+
     // Wait for all roots to complete. Failure here should be impossible, because each
     // individual Future in the join was (eventually) mapped into success.
     let context = RootContext {
