@@ -1611,7 +1611,7 @@ mod remote {
               (0 as usize, false),
               move |(offset, has_sent_any)| {
                 if offset >= bytes.len() && has_sent_any {
-                  None
+                  future::ok(None)
                 } else {
                   let mut req = bazel_protos::bytestream::WriteRequest::new();
                   req.set_resource_name(resource_name.clone());
@@ -1619,7 +1619,7 @@ mod remote {
                   let next_offset = min(offset + chunk_size_bytes, bytes.len());
                   req.set_finish_write(next_offset == bytes.len());
                   req.set_data(bytes.slice(offset, next_offset));
-                  Some(future::ok((
+                  future::ok(Some((
                     (req, grpcio::WriteFlags::default()),
                     (next_offset, true),
                   )))

@@ -68,7 +68,7 @@ boxfuture = { path = "boxfuture" }
 enum_primitive = "0.1.1"
 fnv = "1.0.5"
 fs = { path = "fs" }
-futures = "^0.1.16"
+futures = { path = "/Users/stuhood/src/futures-rs" }
 hashing = { path = "hashing" }
 lazy_static = "0.2.2"
 log = "0.4"
@@ -77,3 +77,6 @@ process_execution = { path = "process_execution" }
 resettable = { path = "resettable" }
 tokio = "0.1"
 tempfile = "3"
+
+[patch.crates-io]
+futures = { path = "/Users/stuhood/src/futures-rs" }
