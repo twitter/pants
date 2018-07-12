@@ -352,14 +352,53 @@ class BaseZincCompile(JvmCompile):
         fp.write(arg)
         fp.write(b'\n')
 
-    if self.runjava(classpath=[self._zinc.zinc],
-                    main=Zinc.ZINC_COMPILE_MAIN,
-                    jvm_options=jvm_options,
-                    args=zinc_args,
-                    workunit_name=self.name(),
-                    workunit_labels=[WorkUnitLabel.COMPILER],
-                    dist=self._zinc.dist):
-      raise TaskError('Zinc compile failed.')
+    if self.get_options().execution_strategy == self.HERMETIC:
+      # execute the zinc wrapper with scalac and input the zinc binary in the input files snapshot like in
+      # https://github.com/pantsbuild/pants/pull/6056/files#diff-36c3f5888813ca78b37075d3cab94aecR265
+      cmd = ['scalac'] # TODO add more here
+      self._execute_compile_hermetically(cmd, ctx)
+    else:
+      if self.runjava(classpath=[self._zinc.zinc],
+                      main=Zinc.ZINC_COMPILE_MAIN,
+                      jvm_options=jvm_options,
+                      args=zinc_args,
+                      workunit_name=self.name(),
+                      workunit_labels=[WorkUnitLabel.COMPILER],
+                      dist=self._zinc.dist):
+        raise TaskError('Zinc compile failed.')
+
+  def _execute_compile_hermetically(self, cmd, ctx):
+    path_to_zinc_wrapper = '' # TODO fill this in with path to zinc wrapper
+    zinc_wrapper_snapshot = self.context._scheduler.capture_snapshots((
+      PathGlobsAndRoot(
+        PathGlobs(('Main.scala',)),
+        str(path_to_zinc_wrapper),
+      ),
+    ))[0]
+
+    # TODO add snapshot of zinc binary
+
+    sources_snapshot = ctx.target.sources_snapshot(scheduler=self.context._scheduler)
+    input_directory = self.context._scheduler.merge_directories((
+      zinc_wrapper_snapshot.directory_digest,
+      sources_snapshot.directory_digest,
+    ))
+    exec_process_request = ExecuteProcessRequest(
+      argv=tuple(cmd),
+      input_files=input_directory,
+      output_files=(os.path.basename(ctx.jar_file),),
+      description='Compiling {} with zinc'.format(ctx.target.address.spec),
+    )
+    exec_result = self.context.execute_process_synchronously(
+      exec_process_request,
+      'scalac',
+      (WorkUnitLabel.TASK, WorkUnitLabel.JVM),
+    )
+
+    # Dump the output to the .pants.d directory where it's expected by downstream tasks.
+    self.context._scheduler.materialize_directories((
+      DirectoryToMaterialize(str(os.path.dirname(ctx.jar_file)), exec_result.output_directory_digest),
+    ))
 
   def _verify_zinc_classpath(self, classpath):
     def is_outside(path, putative_parent):

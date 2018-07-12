@@ -217,3 +217,24 @@ class ZincCompileIntegrationTest(BaseCompileIT):
       with self.temporary_cachedir() as cachedir:
         pants_run = self.run_test_compile(workdir, cachedir, target_spec, clean_all=True)
         self.assertEquals(0, pants_run.returncode)
+
+  def test_basic_binary_hermetic(self):
+    with temporary_dir() as cache_dir:
+      config = {
+        'cache.compile.zinc': {'write_to': [cache_dir]},
+        'compile.zinc': {'execution_strategy': 'hermetic'}
+      }
+
+      with self.temporary_workdir() as workdir:
+        pants_run = self.run_pants_with_workdir(
+          ['compile',
+            'testprojects/src/java/org/pantsbuild/testproject/publish/hello/greet',
+          ],
+          workdir, config)
+        self.assert_success(pants_run)
+        path = os.path.join(
+          workdir,
+          'compile/javac/current/testprojects.src.java.org.pantsbuild.testproject.publish.hello.greet.greet/current',
+          'classes/org/pantsbuild/testproject/publish/hello/greet/Greeting.class')
+        self.assertTrue(os.path.exists(path))
+
