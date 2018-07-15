@@ -247,21 +247,34 @@ impl Scheduler {
 
     let roots = request.root_nodes();
     let core = self.core.clone();
-    ::std::thread::spawn(move || loop {
-      let mut entries = core.graph.heavy_hitters(&roots, 32);
-      entries.sort_by(|x, y| x.0.cmp(&y.0));
+    let (tx, rx) = ::std::sync::mpsc::channel();
+    ::std::thread::spawn(move || {
+      let mut occurrences = HashMap::new();
+      let mut samples = 0;
+      while let Err(_) = rx.try_recv() {
+        for (entry, _) in core.graph.heavy_hitters(&roots, 256) {
+          occurrences
+            .entry(entry)
+            .and_modify(|e| *e += 1)
+            .or_insert(1);
+        }
+        samples += 1;
+        ::std::thread::sleep(::std::time::Duration::from_millis(50));
+      }
+
+      // Render the occurrences in descending order by frequency.
+      let mut occurrences_by_count = occurrences.into_iter().collect::<Vec<_>>();
+      occurrences_by_count.sort_by(|x, y| y.1.cmp(&x.1));
       eprintln!(
-        ">>>>>\n  {}",
-        entries
+        ">>>>> {} samples:\n  {}",
+        samples,
+        occurrences_by_count
           .into_iter()
-          .map(|(mut s, d)| {
-            s.truncate(80);
-            format!("{}.{:03}\t{}", d.as_secs(), d.subsec_nanos() / 1_000_000, s)
-          })
+          .take(64)
+          .map(|(s, f)| format!("{:.3}\t{}", f as f64 / samples as f64, s))
           .collect::<Vec<_>>()
           .join("\n  ")
       );
-      ::std::thread::sleep(::std::time::Duration::from_millis(50));
     });
 
     // Wait for all roots to complete. Failure here should be impossible, because each
@@ -272,6 +285,8 @@ impl Scheduler {
     let results = Scheduler::execute_helper(context, request.roots.clone(), 8)
       .wait()
       .expect("Execution failed.");
+
+    tx.send(()).unwrap();
 
     request
       .roots

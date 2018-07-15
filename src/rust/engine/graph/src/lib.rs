@@ -905,10 +905,12 @@ impl<N: Node> InnerGraph<N> {
         .pg
         .neighbors_directed(id, Direction::Outgoing)
         .filter_map(&queue_entry)
+        .filter(|&(candidate_duration, _)| candidate_duration * 2 > duration)
         .peekable();
 
       if deps.peek().is_none() {
-        // If the entry has no running deps, it is a leaf. Emit it.
+        // If the entry has no running deps with runtimes that are at least half of its own
+        // runtime, then consider it to be a leaf and emit it.
         res.push((
           self.unsafe_entry_for_id(id).node.content().format(),
           duration,
