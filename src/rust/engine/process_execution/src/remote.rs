@@ -7,7 +7,7 @@ use bazel_protos;
 use boxfuture::{BoxFuture, Boxable};
 use bytes::Bytes;
 use digest::{Digest as DigestTrait, FixedOutput};
-use fs::{self, File, PathStat, Store};
+use fs::{self, File, PathStat, Store, Dir};
 use futures::{future, Future, Stream};
 use futures_timer::Delay;
 use grpcio;
@@ -289,6 +289,7 @@ impl CommandRunner {
       .extract_stdout(&execute_response)
       .join(self.extract_stderr(&execute_response))
       .join(self.extract_output_files(&execute_response))
+     // .join(self.extract_output_directories(&execute_response))
       .and_then(move |((stdout, stderr), output_directory)| {
         match grpcio::RpcStatusCode::from(execute_response.get_status().get_code()) {
           grpcio::RpcStatusCode::Ok => future::ok(FallibleExecuteProcessResult {
@@ -484,6 +485,33 @@ impl CommandRunner {
       })
       .collect();
 
+    let path_stats_result2: Result<Vec<PathStat>, String> = execute_response
+        .get_result()
+        .get_output_directories()
+        .into_iter()
+        .map(|output_dir| {
+          let output_dir_path_buf = PathBuf::from(output_dir.get_path());
+          let digest: Result<Digest, String> = output_dir.get_tree_digest().into();
+          path_map.insert(output_dir_path_buf.clone(), digest?);
+          Ok(PathStat::dir(
+            output_dir_path_buf.clone(),
+            Dir(output_dir_path_buf.clone()), // TODO something better
+          ))
+        })
+        .collect();
+
+    let path_stats_result3: Result<Vec<Digest>, String> = execute_response
+        .get_result()
+        .get_output_directories()
+        .into_iter()
+        .map(|output_dir| {
+          let output_dir_path_buf = PathBuf::from(output_dir.get_path());
+          let digest: Result<Digest, String> = output_dir.get_tree_digest().into();
+          digest
+        })
+        .collect();
+    let dir_digests = try_future!(path_stats_result3.map_err(ExecutionError::Fatal));
+    let merged_digest = fs::Snapshot::merge_directories(self.store.clone(), dir_digests);
     let path_stats = try_future!(path_stats_result.map_err(ExecutionError::Fatal));
 
     #[derive(Clone)]
@@ -554,6 +582,20 @@ fn make_execute_request(
     .collect::<Result<Vec<String>, String>>()?;
   output_files.sort();
   command.set_output_files(protobuf::repeated::RepeatedField::from_vec(output_files));
+
+  let mut output_directories = req
+    .output_directories
+    .iter()
+    .map(|p| {
+      p.to_str()
+        .map(|s| s.to_owned())
+        .ok_or_else(|| format!("Non-UTF8 output file path: {:?}", p))
+    })
+    .collect::<Result<Vec<String>, String>>()?;
+  output_directories.sort();
+  command.set_output_directories(protobuf::repeated::RepeatedField::from_vec(output_directories));
+
+
 
   let mut action = bazel_protos::remote_execution::Action::new();
   action.set_command_digest(digest(&command)?);
