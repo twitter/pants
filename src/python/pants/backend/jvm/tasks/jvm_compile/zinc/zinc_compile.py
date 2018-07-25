@@ -266,10 +266,14 @@ class BaseZincCompile(JvmCompile):
     appropriate version does not exist. Eventually it would be great to just fetch this rather
     than compiling it.
     """
+    # TODO(ity): check if the compiler bridge jar exists if so, give its path to `zinc-compiler`
+    # if not, invoke the new tool `zinc-bootstrapper` first to generate the jar, and then pass
+    # the new path to `zinc-compiler`
     hasher = sha1()
     for cp_entry in [self._zinc.zinc, self._zinc.compiler_interface, self._zinc.compiler_bridge]:
       hasher.update(os.path.relpath(cp_entry, self.get_options().pants_workdir))
     key = hasher.hexdigest()[:12]
+
     return os.path.join(self.get_options().pants_bootstrapdir, 'zinc', key)
 
   def compile(self, ctx, args, classpath, upstream_analysis,

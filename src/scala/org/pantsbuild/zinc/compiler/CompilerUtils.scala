@@ -73,6 +73,7 @@ object CompilerUtils {
     val setup = CompilerCacheKey(settings)
     compilerCache.getOrElseUpdate(setup) {
       val instance     = scalaInstance(setup)
+      // TODO(ity): Use the Bootstrapper's compilerInterface instead
       val interfaceJar = compilerInterface(setup, instance, log)
       val scalac       = newScalaCompiler(instance, interfaceJar)
       ZincUtil.compilers(instance, ClasspathOptionsUtil.auto, setup.javaHome, scalac)
@@ -132,6 +133,7 @@ object CompilerUtils {
     Util.propertyFromResource("compiler.properties", "version.number", scalaLoader)
   }
 
+  // TODO(ity): Remove this and move to Bootstrapper
   /**
    * Get the compiler interface for this compiler setup. Compile it if not already cached.
    * NB: This usually occurs within the compilerCache entry lock, but in the presence of
