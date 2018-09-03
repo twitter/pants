@@ -7,14 +7,26 @@ package org.pantsbuild.zinc.bootstrapper
 
 import java.io.File
 import java.net.URLClassLoader
+import sbt.io.Path
+import xsbti.compile.{
+  ClasspathOptionsUtil,
+  ScalaInstance => XScalaInstance
+}
+import sbt.internal.inc.{
+  AnalyzingCompiler,
+  RawCompiler,
+  ScalaInstance
+}
+import sbt.util.Logger
 
 import org.pantsbuild.zinc.util.Util
+
 
 object BootstrapperUtils {
   val CompilerInterfaceId = "compiler-interface"
   val JavaClassVersion = System.getProperty("java.class.version")
 
-  def scalaInstance(setup: CompilerCacheKey): XScalaInstance = {
+  def scalaInstance(scalaCompiler: File, scalaExtra: Seq[File], scalaLibrary: File): XScalaInstance = {
     val allJars = scalaLibrary +: scalaCompiler +: scalaExtra
     val allJarsLoader = scalaLoader(allJars)
     val libraryOnlyLoader = scalaLoader(scalaLibrary +: scalaExtra)
@@ -39,8 +51,7 @@ object BootstrapperUtils {
     Util.propertyFromResource("compiler.properties", "version.number", scalaLoader)
   }
 
-  def compilerInterface(
-    compilerBridgeSrc: File, compilerInterface: File, scalaInstance: XScalaInstance, log: Logger): File = {
+  def compilerInterface(output: File, compilerBridgeSrc: File, compilerInterface: File, scalaInstance: XScalaInstance, log: Logger): Unit = {
     def compile(targetJar: File): Unit =
       AnalyzingCompiler.compileSources(
         Seq(compilerBridgeSrc),
@@ -50,19 +61,16 @@ object BootstrapperUtils {
         new RawCompiler(scalaInstance, ClasspathOptionsUtil.auto, log),
         log
       )
-    val dir = setup.cacheDir / interfaceId(scalaInstance.actualVersion)
-    val interfaceJar = dir / (CompilerInterfaceId + ".jar")
-    if (!interfaceJar.isFile) {
-      dir.mkdirs()
-      val tempJar = File.createTempFile("interface-", ".jar.tmp", dir)
-      try {
-        compile(tempJar)
-        tempJar.renameTo(interfaceJar)
-      } finally {
-        tempJar.delete()
-      }
+
+    val dir = output.getParentFile
+    dir.mkdirs()
+    val tempJar = File.createTempFile("interface-", ".jar.tmp", dir)
+    try {
+      compile(tempJar)
+      tempJar.renameTo(output)
+    } finally {
+      tempJar.delete()
     }
-    interfaceJar
   }
 
   def interfaceId(scalaVersion: String) = CompilerInterfaceId + "-" + scalaVersion + "-" + JavaClassVersion

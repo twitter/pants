@@ -11,6 +11,8 @@ scala_library(
   dependencies=[
     '3rdparty/jvm/org/scala-sbt:zinc',
     'src/scala/org/pantsbuild/zinc/options',
+    'src/scala/org/pantsbuild/zinc/util',
+
   ],
   strict_deps=True,
   platform='java8',

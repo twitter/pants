@@ -5,22 +5,28 @@
 
 package org.pantsbuild.zinc.bootstrapper
 
-import java.io.File
-import scala.compat.java8.OptionConverters._
-import com.fasterxml.jackson.databind.ObjectMapper
-import com.fasterxml.jackson.module.scala.DefaultScalaModule
-import com.fasterxml.jackson.module.scala.experimental.ScalaObjectMapper
-import org.pantsbuild.zinc.options.Parsed
+//import java.io.File
+//import scala.compat.java8.OptionConverters._
+//import com.fasterxml.jackson.databind.ObjectMapper
+//import com.fasterxml.jackson.module.scala.DefaultScalaModule
+//import com.fasterxml.jackson.module.scala.experimental.ScalaObjectMapper
+//import org.pantsbuild.zinc.options.Parsed
 
 
 object Main {
   val Command = "zinc-bootstrapper"
 
-
   def main(args: Array[String]): Unit = {
-    val Parsed(settings, residual, errors) = Settings.parse(args)
-    // TODO(ity): Invoke Bootstrapper with args to extract the path to interface jar
-    val setup = CompilerCacheKey(settings)
-    BootstrapperUtils.compilerInterface(setup.compilerBridgeSrc, setup.compilerInterface, scalaInstance, log)
+    val outputPath = "/tmp/practice.jar"
+    val settings = Settigns(outputPath, )
+
+    //output: File, compilerBridgeSrc: File, compilerInterface: File, scalaInstance: XScalaInstance,
+    BootstrapperUtils.compilerInterface(outputPath)
   }
 }
+
+case class Settings(
+  output: File,
+  compilerBridgeSrc: File,
+  compilerInterface: File
+)
