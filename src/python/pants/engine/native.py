@@ -173,6 +173,7 @@ void tasks_add_get(Tasks*, TypeConstraint, TypeId);
 void tasks_add_select(Tasks*, TypeConstraint);
 void tasks_add_select_variant(Tasks*, TypeConstraint, Buffer);
 void tasks_task_end(Tasks*);
+void tasks_aggregation_add(Tasks*, Function, TypeConstraint);
 void tasks_singleton_add(Tasks*, Handle, TypeConstraint);
 void tasks_destroy(Tasks*);
 

@@ -34,6 +34,7 @@ impl UnreachableError {
 
 #[derive(Eq, Hash, PartialEq, Clone, Debug)]
 pub enum EntryWithDeps {
+  Aggregation(Aggregation),
   Root(RootEntry),
   Inner(InnerEntry),
 }
@@ -41,6 +42,7 @@ pub enum EntryWithDeps {
 impl EntryWithDeps {
   fn params(&self) -> &ParamTypes {
     match self {
+      &EntryWithDeps::Aggregation(ref a) => &a.params,
       &EntryWithDeps::Inner(ref ie) => &ie.params,
       &EntryWithDeps::Root(ref re) => &re.params,
     }
@@ -57,10 +59,17 @@ impl EntryWithDeps {
   }
 
   ///
-  /// Returns the set of SelectKeys representing the dependencies of this EntryWithDeps.
+  /// Returns the set of SelectKeys representing the dependencies of this EntryWithDeps, and a
+  /// boolean indicating whether multiple sources of each key should be allowed.
   ///
-  fn dependency_keys(&self) -> Vec<SelectKey> {
+  fn dependency_keys(&self) -> (Vec<SelectKey>, bool) {
     match self {
+      &EntryWithDeps::Aggregation(Aggregation { ref product, .. }) => {
+        let keys = vec![SelectKey::JustSelect(Select::without_variant(
+          product.clone(),
+        ))];
+        (keys, true)
+      }
       &EntryWithDeps::Inner(InnerEntry {
         rule: Rule::Task(Task {
           ref clause,
@@ -73,15 +82,21 @@ impl EntryWithDeps {
         ref clause,
         ref gets,
         ..
-      }) => clause
-        .iter()
-        .map(|s| SelectKey::JustSelect(s.clone()))
-        .chain(gets.iter().map(|g| SelectKey::JustGet(*g)))
-        .collect(),
+      }) => {
+        let keys = clause
+          .iter()
+          .map(|s| SelectKey::JustSelect(s.clone()))
+          .chain(gets.iter().map(|g| SelectKey::JustGet(*g)))
+          .collect();
+        (keys, false)
+      }
       &EntryWithDeps::Inner(InnerEntry {
         rule: Rule::Intrinsic(Intrinsic { ref input, .. }),
         ..
-      }) => vec![SelectKey::JustSelect(Select::without_variant(*input))],
+      }) => {
+        let keys = vec![SelectKey::JustSelect(Select::without_variant(*input))];
+        (keys, false)
+      }
     }
   }
 
@@ -93,6 +108,7 @@ impl EntryWithDeps {
     let mut simplified = self.clone();
     {
       let simplified_params = match &mut simplified {
+        &mut EntryWithDeps::Aggregation(ref mut a) => &mut a.params,
         &mut EntryWithDeps::Inner(ref mut ie) => &mut ie.params,
         &mut EntryWithDeps::Root(ref mut re) => &mut re.params,
       };
@@ -117,6 +133,13 @@ pub enum Entry {
   Param(TypeId),
   WithDeps(EntryWithDeps),
   Singleton(Key, TypeConstraint),
+}
+
+#[derive(Eq, Hash, PartialEq, Clone, Debug)]
+pub struct Aggregation {
+  pub params: ParamTypes,
+  pub product: TypeConstraint,
+  pub func: Function,
 }
 
 #[derive(Eq, Hash, PartialEq, Clone, Debug)]
@@ -380,7 +403,7 @@ impl<'t> GraphMaker<'t> {
     let mut cycled_on = HashSet::new();
     let mut unfulfillable_diagnostics = Vec::new();
 
-    let dependency_keys = entry.dependency_keys();
+    let (dependency_keys, is_aggregation) = entry.dependency_keys();
 
     for select_key in dependency_keys {
       let (params, product) = match &select_key {
@@ -400,7 +423,7 @@ impl<'t> GraphMaker<'t> {
       let mut fulfillable_candidates = fulfillable_candidates_by_key
         .entry(select_key.clone())
         .or_insert_with(Vec::new);
-      for candidate in rhs(&self.tasks, &params, &product) {
+      for candidate in rhs(&self.tasks, &params, &product, is_aggregation) {
         match candidate {
           Entry::WithDeps(c) => match self.construct_graph_helper(
             rule_dependency_edges,
@@ -476,10 +499,22 @@ impl<'t> GraphMaker<'t> {
     //
     // If this is an Aggregration, flatten the candidates by duplicating the SelectKey to treat
     // each concrete rule as a group of candidates. Otherwise, flatten each group of candidates.
-    let flattened_fulfillable_candidates_by_key = fulfillable_candidates_by_key
-      .into_iter()
-      .map(|(k, candidate_group)| (k, Itertools::flatten(candidate_group.into_iter()).collect()))
-      .collect();
+    let flattened_fulfillable_candidates_by_key = if is_aggregation {
+      // Expect one key. TODO: Adjust the `dependency_keys` method to make this typesafe.
+      let (key, fulfillable_candidates): (SelectKey, Vec<Vec<Entry>>) =
+        fulfillable_candidates_by_key.into_iter().next().unwrap();
+      // Treat each group of candidates as an input, all with the same key.
+      // TODO: RuleEdges will need adjustment to support this duplication of SelectKey.
+      fulfillable_candidates
+        .into_iter()
+        .map(|candidates| (key.clone(), candidates))
+        .collect()
+    } else {
+      fulfillable_candidates_by_key
+        .into_iter()
+        .map(|(k, candidate_group)| (k, Itertools::flatten(candidate_group.into_iter()).collect()))
+        .collect()
+    };
 
     // Generate one Entry per legal combination of parameters.
     let simplified_entries =
@@ -746,7 +781,7 @@ impl<'t> GraphMaker<'t> {
     param_types: &ParamTypes,
     product_type: &TypeConstraint,
   ) -> Option<RootEntry> {
-    let candidates = rhs(&self.tasks, param_types, product_type);
+    let candidates = rhs(&self.tasks, param_types, product_type, false);
     if candidates.is_empty() {
       None
     } else {
@@ -861,6 +896,16 @@ pub fn entry_str(entry: &Entry) -> String {
 
 fn entry_with_deps_str(entry: &EntryWithDeps) -> String {
   match entry {
+    &EntryWithDeps::Aggregation(Aggregation {
+      ref params,
+      ref product,
+      ref func,
+    }) => format!(
+      "Aggregation({}, {}) for {}",
+      type_constraint_str(product.clone()),
+      function_str(func),
+      params_str(params)
+    ),
     &EntryWithDeps::Inner(InnerEntry {
       rule: Rule::Task(ref task_rule),
       ref params,
@@ -1118,9 +1163,25 @@ impl RuleEdges {
 ///
 /// Select Entries that can provide the given product type with the given parameters.
 ///
-fn rhs(tasks: &Tasks, params: &ParamTypes, product_type: &TypeConstraint) -> Vec<Entry> {
+/// If from_aggregation, then we are already selecting in the context of an Aggregation, and so we
+/// ignore installed Aggregation rules to avoid recursion.
+///
+fn rhs(
+  tasks: &Tasks,
+  params: &ParamTypes,
+  product_type: &TypeConstraint,
+  from_aggregation: bool,
+) -> Vec<Entry> {
   if let Some(&(ref key, _)) = tasks.gen_singleton(product_type) {
     return vec![Entry::Singleton(*key, *product_type)];
+  } else if !from_aggregation {
+    if let Some(func) = tasks.gen_aggregation(product_type) {
+      return vec![Entry::WithDeps(EntryWithDeps::Aggregation(Aggregation {
+        params: params.clone(),
+        product: *product_type,
+        func: func.clone(),
+      }))];
+    }
   }
 
   let mut entries = Vec::new();

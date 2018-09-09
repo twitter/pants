@@ -168,6 +168,29 @@ class TaskRule(datatype(['output_constraint', 'input_selectors', 'input_gets', '
                                    self.func.__name__)
 
 
+class AggregationRule(datatype(['output_constraint', 'func']), Rule):
+  """A rule that receives the results of all other rules for a product to aggregate them.
+
+  An AggregationRule supports composability of @rules by allowing additional rules to be installed
+  to provide some type without removing or otherwise modifying the installed rules.
+  """
+
+  def __new__(cls, output_type, func):
+    # Validate result type.
+    if isinstance(output_type, Exactly):
+      constraint = output_type
+    elif isinstance(output_type, type):
+      constraint = Exactly(output_type)
+    else:
+      raise TypeError("Expected an output_type for rule; got: {}".format(output_type))
+
+    return super(AggregationRule, cls).__new__(cls, constraint, func)
+
+  def __repr__(self):
+    return '{}({}, {})'.format(
+        type(self).__name__, type_or_constraint_repr(self.output_constraint), self.func.__name__)
+
+
 class SingletonRule(datatype(['output_constraint', 'value']), Rule):
   """A default rule for a product, which is thus a singleton for that product."""
 

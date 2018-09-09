@@ -19,7 +19,7 @@ from pants.engine.fs import (DirectoryDigest, DirectoryToMaterialize, FileConten
 from pants.engine.isolated_process import ExecuteProcessRequest, FallibleExecuteProcessResult
 from pants.engine.native import Function, TypeConstraint, TypeId
 from pants.engine.nodes import Return, State, Throw
-from pants.engine.rules import RuleIndex, SingletonRule, TaskRule
+from pants.engine.rules import AggregationRule, RuleIndex, SingletonRule, TaskRule
 from pants.engine.selectors import Select, SelectVariant, constraint_for
 from pants.engine.struct import HasProducts, Variants
 from pants.util.contextutil import temporary_file_path
@@ -212,12 +212,24 @@ class Scheduler(object):
           continue
         registered.add(key)
 
-        if type(rule) is SingletonRule:
+        if type(rule) is AggregationRule:
+          self._register_aggregation(output_constraint, rule)
+        elif type(rule) is SingletonRule:
           self._register_singleton(output_constraint, rule)
         elif type(rule) is TaskRule:
           self._register_task(output_constraint, rule)
         else:
           raise ValueError('Unexpected Rule type: {}'.format(rule))
+
+  def _register_aggregation(self, output_constraint, rule):
+    """Register the given AggregationRule.
+
+    An AggregationRule installed for a type merges the results of all other providers of that type.
+    """
+    func = Function(self._to_key(rule.func))
+    self._native.lib.tasks_aggregation_add(self._tasks,
+                                           func,
+                                           output_constraint)
 
   def _register_singleton(self, output_constraint, rule):
     """Register the given SingletonRule.

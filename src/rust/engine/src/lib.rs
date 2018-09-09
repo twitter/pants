@@ -401,6 +401,17 @@ pub extern "C" fn tasks_create() -> *const Tasks {
 }
 
 #[no_mangle]
+pub extern "C" fn tasks_aggregation_add(
+  tasks_ptr: *mut Tasks,
+  func: Function,
+  output_constraint: TypeConstraint,
+) {
+  with_tasks(tasks_ptr, |tasks| {
+    tasks.aggregation_add(func, output_constraint);
+  })
+}
+
+#[no_mangle]
 pub extern "C" fn tasks_singleton_add(
   tasks_ptr: *mut Tasks,
   handle: Handle,

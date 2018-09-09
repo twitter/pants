@@ -289,6 +289,24 @@ impl Select {
           }
         }
       }
+      &rule_graph::Entry::WithDeps(rule_graph::EntryWithDeps::Aggregation(ref a)) => {
+        let edges = context
+          .core
+          .rule_graph
+          .edges_for_inner(&self.entry)
+          .expect("Expected edges to exist for Aggregation.");
+        let deps = edges
+          .all_dependencies()
+          .map(|dep_entry| {
+            Select::new_with_entries(a.product, self.params.clone(), dep_entry.clone())
+              .run(context.clone())
+          })
+          .collect::<Vec<_>>();
+        let func_val = externs::val_for(&a.func.0);
+        future::join_all(deps)
+          .and_then(move |dep_values| externs::call(&func_val, &dep_values))
+          .to_boxed()
+      }
       &rule_graph::Entry::WithDeps(rule_graph::EntryWithDeps::Root(_))
       | &rule_graph::Entry::Param(_)
       | &rule_graph::Entry::Singleton { .. } => {

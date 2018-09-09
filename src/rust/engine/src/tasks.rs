@@ -24,6 +24,8 @@ pub struct Task {
 pub struct Tasks {
   // output product type -> Intrinsic providing it
   intrinsics: HashMap<TypeConstraint, Intrinsic, FNV>,
+  // Aggregations aggregate the outputs of all other rules for a type.
+  aggregations: HashMap<TypeConstraint, Function, FNV>,
   // Singleton Values to be returned for a given TypeConstraint.
   singletons: HashMap<TypeConstraint, (Key, Value), FNV>,
   // output product type -> list of tasks providing it
@@ -38,7 +40,8 @@ pub struct Tasks {
 ///   2. add_*() - zero or more times per task to add input clauses
 ///   3. task_end() - once per task
 ///
-/// Also has a one-shot method for adding Singletons (which have no Selects):
+/// Also has one-shot methods for adding Singletons and Aggregations (which have no Selects):
+///   * aggregation_add()
 ///   * singleton_add()
 ///
 /// (This protocol was original defined in a Builder, but that complicated the C lifecycle.)
@@ -47,6 +50,7 @@ impl Tasks {
   pub fn new() -> Tasks {
     Tasks {
       intrinsics: HashMap::default(),
+      aggregations: HashMap::default(),
       singletons: HashMap::default(),
       tasks: HashMap::default(),
       preparing: None,
@@ -73,6 +77,10 @@ impl Tasks {
       .values()
       .map(|&(k, _)| *k.type_id())
       .collect()
+  }
+
+  pub fn gen_aggregation(&self, product: &TypeConstraint) -> Option<&Function> {
+    self.aggregations.get(product)
   }
 
   pub fn gen_singleton(&self, product: &TypeConstraint) -> Option<&(Key, Value)> {
@@ -107,6 +115,16 @@ impl Tasks {
     ].into_iter()
       .map(|i| (i.product, i))
       .collect();
+  }
+
+  pub fn aggregation_add(&mut self, func: Function, product: TypeConstraint) {
+    if let Some(existing_func) = self.aggregations.get(&product) {
+      panic!(
+        "More than one Aggregation rule was installed for the product {:?}: {:?} vs {:?}",
+        product, existing_func, func,
+      );
+    }
+    self.aggregations.insert(product, func);
   }
 
   pub fn singleton_add(&mut self, value: Value, product: TypeConstraint) {
