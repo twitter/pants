@@ -4,10 +4,11 @@
 
 from __future__ import absolute_import, division, print_function, unicode_literals
 
-from pants.rules.core.fastlist import fast_list
+from pants.rules.core.fastlist import fast_dependees, fast_list
 
 
 def create_core_rules():
   return [
     fast_list,
+    fast_dependees,
   ]

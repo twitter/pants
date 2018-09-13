@@ -194,8 +194,7 @@ class LocalPantsRunner(object):
         self._target_roots
       )
     except Exception as e:
-      logger.warn('Encountered unhandled exception {!r} during rule execution!'
-                  .format(e))
+      logger.warn('Encountered unhandled exception during rule execution!: {}'.format(e))
       return 1
     else:
       return 0

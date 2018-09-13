@@ -7,10 +7,12 @@ from __future__ import absolute_import, division, print_function, unicode_litera
 import ast
 import functools
 import inspect
+import itertools
 import logging
 from abc import abstractproperty
 from builtins import bytes, str
 from collections import OrderedDict
+from types import GeneratorType
 
 from future.utils import PY2
 from twitter.common.collections import OrderedSet
@@ -59,6 +61,17 @@ class _GoalProduct(object):
     return cls.PRODUCT_MAP[name]
 
 
+def _terminated(generator, terminator):
+  """A generator that "appends" the given terminator value to the given generator."""
+  gen_input = None
+  try:
+    while True:
+      res = generator.send(gen_input)
+      gen_input = yield res
+  except StopIteration:
+    yield terminator
+
+
 def _make_rule(output_type, input_selectors, for_goal=None):
   """A @decorator that declares that a particular static function may be used as a TaskRule.
 
@@ -95,7 +108,10 @@ def _make_rule(output_type, input_selectors, for_goal=None):
     if for_goal:
       def goal_and_return(*args, **kwargs):
         res = func(*args, **kwargs)
-        if res is not None:
+        if isinstance(res, GeneratorType):
+          # Return a generator with an output_type instance appended.
+          return _terminated(res, output_type())
+        elif res is not None:
           raise Exception('A @console_rule should not have a return value.')
         return output_type()
       functools.update_wrapper(goal_and_return, func)
@@ -130,10 +146,6 @@ class Rule(AbstractClass):
   @abstractproperty
   def output_constraint(self):
     """An output Constraint type for the rule."""
-
-  @abstractproperty
-  def input_selectors(self):
-    """Collection of input selectors."""
 
 
 class TaskRule(datatype(['output_constraint', 'input_selectors', 'input_gets', 'func']), Rule):
@@ -191,10 +203,6 @@ class SingletonRule(datatype(['output_constraint', 'value']), Rule):
     # Create.
     return super(SingletonRule, cls).__new__(cls, constraint, value)
 
-  @property
-  def input_selectors(self):
-    return tuple()
-
   def __repr__(self):
     return '{}({}, {})'.format(type(self).__name__, type_or_constraint_repr(self.output_constraint), self.value)
 
@@ -206,9 +214,6 @@ class RootRule(datatype(['output_constraint']), Rule):
   particular type might be when a value is provided as a root subject at the beginning
   of an execution.
   """
-
-  def input_selectors(self):
-    return []
 
 
 class RuleIndex(datatype(['rules', 'roots'])):
