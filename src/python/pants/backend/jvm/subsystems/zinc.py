@@ -4,6 +4,8 @@
 
 from __future__ import absolute_import, division, print_function, unicode_literals
 
+import json
+import os
 from builtins import object
 
 from pants.backend.jvm.subsystems.dependency_context import DependencyContext
@@ -202,12 +204,22 @@ class Zinc(object):
                                                            self.ZINC_EXTRACTOR_TOOL_NAME,
                                                            scope=self._zinc_factory.options_scope)
 
+  @memoized_method
+  def _record_3rdparty_stats(self, target, classpath_products):
+    file_sizes = [os.path.getsize(f) for _, f in classpath_products.get_for_target(target) if os.path.isfile(f)]
+    if not file_sizes:
+      return
+    print('>>> {}'.format(json.dumps({target.address.spec: {'size': sum(file_sizes), '3rdparty': True}})))
+
   def compile_classpath_entries(self, classpath_product_key, target, extra_cp_entries=None):
     classpath_product = self._products.get_data(classpath_product_key)
     if DependencyContext.global_instance().defaulted_property(target, lambda x: x.strict_deps):
-      dependencies = target.strict_dependencies(DependencyContext.global_instance())
+      dependencies = list(target.strict_dependencies(DependencyContext.global_instance()))
     else:
-      dependencies = DependencyContext.global_instance().all_dependencies(target)
+      dependencies = list(DependencyContext.global_instance().all_dependencies(target))
+
+    for dep in dependencies:
+      self._record_3rdparty_stats(dep, classpath_product)
 
     all_extra_cp_entries = list(self._compiler_plugins_cp_entries())
     if extra_cp_entries:

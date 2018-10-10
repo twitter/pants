@@ -7,6 +7,7 @@ from __future__ import absolute_import, division, print_function, unicode_litera
 import functools
 import os
 from builtins import object, open, str
+import json
 from multiprocessing import cpu_count
 
 from future.utils import string_types
@@ -716,18 +717,20 @@ class JvmCompile(NailgunTaskBase):
                             compiler_option_sets,
                             zinc_file_manager,
                             counter)
-        self._record_target_stats(tgt,
-                                  len(dependency_cp_entries),
-                                  len(ctx.sources),
-                                  timer.elapsed,
-                                  is_incremental,
-                                  'compile')
+        elapsed = float(timer.elapsed)
 
         # Write any additional resources for this target to the target workdir.
         self.write_extra_resources(ctx)
 
         # Jar the compiled output.
         self._create_context_jar(ctx)
+
+        self._record_target_stats(tgt,
+                                  ctx.sources,
+                                  list(tgt.strict_dependencies(dep_context)),
+                                  elapsed,
+                                  os.path.getsize(ctx.jar_file),
+                                  is_incremental)
 
       # Update the products with the latest classes.
       classpath_product.add_for_target(
@@ -779,14 +782,17 @@ class JvmCompile(NailgunTaskBase):
       return True
     return os.path.exists(ctx.analysis_file)
 
-  def _record_target_stats(self, target, classpath_len, sources_len, compiletime, is_incremental,
-    stats_key):
+  def _record_target_stats(self, target, sources, strict_deps, compiletime, output_size, is_incremental):
+    metrics = {}
     def record(k, v):
-      self.context.run_tracker.report_target_info(self.options_scope, target, [stats_key, k], v)
+      metrics[k] = v
     record('time', compiletime)
-    record('classpath_len', classpath_len)
-    record('sources_len', sources_len)
+    record('strict_deps', [t.address.spec for t in strict_deps])
+    record('srcs_java', sum(1 for s in sources if s.endswith('.java')))
+    record('srcs_scala', sum(1 for s in sources if s.endswith('.scala')))
+    record('size', output_size)
     record('incremental', is_incremental)
+    print('>>> {}'.format(json.dumps({target.address.spec: metrics})))
 
   def _collect_invalid_compile_dependencies(self, compile_target, invalid_target_set):
     # Collects all invalid dependencies that are not dependencies of other invalid dependencies
