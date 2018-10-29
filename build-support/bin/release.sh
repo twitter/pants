@@ -553,22 +553,24 @@ function build_pex() {
   # If $1 == "fetch", fetches the linux and OSX wheels which were built on travis.
   local mode="$1"
 
+  set -euxo pipefail
+
   local linux_platform="linux_x86_64"
   local osx_platform="macosx_10.11_x86_64"
 
   case "${mode}" in
     build)
       case "$(uname)" in
-	Darwin)
-	  local platform="${osx_platform}"
-	  ;;
-	Linux)
-	  local platform="${linux_platform}"
-	  ;;
-	*)
-	  echo >&2 "Unknown uname"
-	  exit 1
-	  ;;
+        Darwin)
+          local platform="${osx_platform}"
+          ;;
+        Linux)
+          local platform="${linux_platform}"
+          ;;
+        *)
+          echo >&2 "Unknown uname"
+          exit 1
+          ;;
       esac
       local platforms=("${platform}")
       local dest="${ROOT}/dist/pants.${PANTS_UNSTABLE_VERSION}.${platform}.pex"
