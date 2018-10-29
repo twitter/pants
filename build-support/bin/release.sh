@@ -553,7 +553,7 @@ function build_pex() {
   # If $1 == "fetch", fetches the linux and OSX wheels which were built on travis.
   local mode="$1"
 
-  set -euxo pipefail
+  set -exo pipefail
 
   local linux_platform="linux_x86_64"
   local osx_platform="macosx_10.11_x86_64"
