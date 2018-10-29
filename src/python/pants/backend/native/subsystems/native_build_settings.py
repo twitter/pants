@@ -39,7 +39,7 @@ class NativeBuildSettings(Subsystem, MirroredTargetOptionMixin):
              choices=ToolchainVariant.allowed_values,
              default=ToolchainVariant.default_value,
              fingerprint=True, advanced=True,
-             help='???')
+             help='The choice of toolchain for the compiler and linker.')
 
   def get_strict_deps_value_for_target(self, target):
     return self.get_target_mirrored_option('strict_deps', target)
