@@ -537,12 +537,13 @@ function execute_pex() {
     curl -sSL "${PEX_DOWNLOAD_PREFIX}/v${PEX_VERSION}/${PEX_PEX}" -O
     chmod +x ./${PEX_PEX}
 
-    ./${PEX_PEX} \
+    pex \
+      --python=python2.7 \
       --no-build \
       --no-pypi \
       --disable-cache \
-      -f "${DEPLOY_PANTS_WHEEL_DIR}/${PANTS_UNSTABLE_VERSION}" \
-      -f "${DEPLOY_3RDPARTY_WHEEL_DIR}/${PANTS_UNSTABLE_VERSION}" \
+      -f "${DEPLOY_PANTS_WHEEL_DIR}/${PANTS_STABLE_VERSION}" \
+      -f "${DEPLOY_3RDPARTY_WHEEL_DIR}/${PANTS_STABLE_VERSION}" \
       "$@"
   )
 }
@@ -573,7 +574,7 @@ function build_pex() {
           ;;
       esac
       local platforms=("${platform}")
-      local dest="${ROOT}/dist/pants.${PANTS_UNSTABLE_VERSION}.${platform}.pex"
+      local dest="${ROOT}/dist/pants.${PANTS_STABLE_VERSION}.${platform}.pex"
       local stable_dest="${DEPLOY_DIR}/pex/pants.${PANTS_STABLE_VERSION}.${platform}.pex"
       ;;
     fetch)
@@ -593,13 +594,13 @@ function build_pex() {
   if [[ "${mode}" == "fetch" ]]; then
     fetch_and_check_prebuilt_wheels "${DEPLOY_DIR}"
   else
-    build_pants_packages "${PANTS_UNSTABLE_VERSION}"
-    build_3rdparty_packages "${PANTS_UNSTABLE_VERSION}"
+    build_pants_packages "${PANTS_STABLE_VERSION}"
+    build_3rdparty_packages "${PANTS_STABLE_VERSION}"
   fi
 
   local requirements=()
   for pkg_name in $PANTS_PEX_PACKAGES; do
-    requirements=("${requirements[@]}" "${pkg_name}==${PANTS_UNSTABLE_VERSION}")
+    requirements=("${requirements[@]}" "${pkg_name}==${PANTS_STABLE_VERSION}")
   done
 
   local platform_flags=()
