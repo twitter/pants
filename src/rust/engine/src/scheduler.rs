@@ -282,11 +282,38 @@ impl Scheduler {
       .map(|s| s.into())
       .collect();
 
+    // This map keeps the k most relevant jobs in assigned possitions.
+    // Keys are positions in the display (display workers) and the values are the actual jobs to print.
+    let mut tasks_to_display: HashMap<u8, (String, Duration)> = HashMap::new();
+
     let results = loop {
       if let Ok(res) = receiver.recv_timeout(Duration::from_millis(100)) {
         break res;
       } else if let Some(display) = optional_display.as_mut() {
-        Scheduler::display_ongoing_tasks(&self.core.graph, &roots, display);
+        // Update the graph. To do that, we iterate over heavy hitters
+        let mut heavy_hitters: Vec<(String, Duration)> = self
+          .core
+          .graph
+          .heavy_hitters(&roots, display.worker_count());
+        // Tasks that should be displayed but aren't in tasks_to_display yet
+        let mut not_displayed_tasks = heavy_hitters
+          .drain_filter(|(id, duration)| {
+            tasks_to_display
+              .values()
+              .find(|(nid, ndur)| (nid == id && ndur == duration))
+              .is_none()
+          }).collect::<Vec<_>>();
+        // The tasks that are already displayed
+        let displayed_tasks = heavy_hitters;
+        // TODO This bit doesn't compile, because it can't build a map of (wid, (task)) from its iterator.
+        tasks_to_display = tasks_to_display
+            .iter()
+            // For each field in the map that is not displayed
+            .filter(move |(_, a)| {!displayed_tasks.contains(a)})
+            // Replace its value with a new heavy-hitter
+            .map(move |(worker_id, _)| (worker_id, not_displayed_tasks.pop().unwrap()))
+            .collect();
+        Scheduler::display_ongoing_tasks(&self.core.graph, &roots, display, &tasks_to_display);
       }
     };
     if let Some(display) = optional_display.as_mut() {
@@ -301,18 +328,24 @@ impl Scheduler {
       .collect()
   }
 
-  fn display_ongoing_tasks(graph: &Graph<NodeKey>, roots: &[NodeKey], display: &mut EngineDisplay) {
+  fn display_ongoing_tasks(
+    graph: &Graph<NodeKey>,
+    roots: &[NodeKey],
+    display: &mut EngineDisplay,
+    tasks_to_display: &HashMap<u8, (String, Duration)>,
+  ) {
     let display_worker_count = display.worker_count();
-    let ongoing_tasks = graph.heavy_hitters(&roots, display_worker_count);
-    for (i, task) in ongoing_tasks.iter().enumerate() {
-      display.update(i.to_string(), format!("{:?}", task));
+    let mut ongoing_tasks = tasks_to_display;
+    for (worker, (i, (id, _))) in ongoing_tasks.iter().enumerate() {
+      // TODO Maybe we want to print something else besides the ID here.
+      display.update(id.clone(), format!("{:?}", id));
     }
     // If the number of ongoing tasks is less than the number of workers,
     // fill the rest of the workers with empty string.
     // TODO(yic): further improve the UI. https://github.com/pantsbuild/pants/issues/6666
-    for i in ongoing_tasks.len()..display_worker_count {
-      display.update(i.to_string(), "".to_string());
-    }
+    //    for i in ongoing_tasks.len()..display_worker_count {
+    //      display.update(i.to_string(), "".to_string());
+    //    }
     display.render();
   }
 
