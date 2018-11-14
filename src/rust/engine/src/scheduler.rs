@@ -262,11 +262,7 @@ impl Scheduler {
   ///
   /// Compute the results for roots in the given request.
   ///
-  pub fn execute<'e>(
-    &self,
-    request: &'e ExecutionRequest,
-    session: &Session,
-  ) -> Vec<(&'e Key, &'e TypeConstraint, RootResult)> {
+  pub fn execute(&self, request: &ExecutionRequest, session: &Session) -> Vec<RootResult> {
     // Bootstrap tasks for the roots, and then wait for all of them.
     debug!("Launching {} roots.", request.roots.len());
 
@@ -302,12 +298,7 @@ impl Scheduler {
       display.finish();
     };
 
-    request
-      .roots
-      .iter()
-      .zip(results.into_iter())
-      .map(|(s, r)| (s.params.expect_single(), &s.selector.product, r))
-      .collect()
+    results
   }
 
   fn display_ongoing_tasks(graph: &Graph<NodeKey>, roots: &[NodeKey], display: &mut EngineDisplay) {
