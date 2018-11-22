@@ -174,7 +174,7 @@ class NativeCompile(NativeTask, AbstractClass):
     compiler_option_sets = (self._compile_settings.native_build_step_settings
                                 .get_compiler_option_sets_for_target(target))
 
-    return NativeCompileRequest(
+    compile_request = NativeCompileRequest(
       compiler=self._compiler,
       include_dirs=include_dirs,
       sources=sources_and_headers,
@@ -182,6 +182,10 @@ class NativeCompile(NativeTask, AbstractClass):
                             .native_build_step_settings
                             .get_merged_args_for_compiler_option_sets(compiler_option_sets)),
       output_dir=versioned_target.results_dir)
+
+    self.context.log.debug(compile_request)
+
+    return compile_request
 
   def _make_compile_argv(self, compile_request):
     """Return a list of arguments to use to compile sources. Subclasses can override and append."""
@@ -201,6 +205,7 @@ class NativeCompile(NativeTask, AbstractClass):
       ] +
       [os.path.join(buildroot, src) for src in compile_request.sources])
 
+    self.context.log.info("selected compiler exe name: '{}'".format(compiler.exe_filename))
     self.context.log.debug("compile argv: {}".format(argv))
 
     return argv
