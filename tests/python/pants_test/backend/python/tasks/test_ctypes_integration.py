@@ -114,7 +114,62 @@ class CTypesIntegrationTest(PantsRunIntegrationTest):
       binary_run_output = invoke_pex_for_output(pex)
       self.assertEqual(b'x=3, f(x)=17\n', binary_run_output)
 
-  def test_ctypes_native_language_interop(self):
+  def test_invalidation_ctypes(self):
+    """Test that the current version of a python_dist() is resolved after modifying its sources."""
+    with temporary_dir() as tmp_dir:
+      with self.mock_buildroot(
+          dirs_to_copy=[self._binary_target_dir]) as buildroot, buildroot.pushd():
+
+        def run_target(goal):
+          return self.run_pants_with_workdir(
+            command=[goal, self._binary_target],
+            workdir=os.path.join(buildroot.new_buildroot, '.pants.d'),
+            build_root=buildroot.new_buildroot,
+            config={
+              GLOBAL_SCOPE_CONFIG_SECTION: {
+                'pants_distdir': tmp_dir,
+              },
+            },
+          )
+
+        output_pex = os.path.join(tmp_dir, 'bin.pex')
+
+        initial_result_message = 'x=3, f(x)=17'
+
+        unmodified_pants_run = run_target('run')
+        self.assert_success(unmodified_pants_run)
+        self.assertIn(initial_result_message, unmodified_pants_run.stdout_data)
+
+        unmodified_pants_binary_create = run_target('binary')
+        self.assert_success(unmodified_pants_binary_create)
+        binary_run_output = invoke_pex_for_output(output_pex)
+        self.assertIn(initial_result_message, binary_run_output)
+
+        # Modify one of the source files for this target so that the output is different.
+        cpp_source_file = os.path.join(self._binary_target_dir, 'some_more_math.cpp')
+        with open(cpp_source_file, 'r') as f:
+          orig_contents = f.read()
+        modified_contents = re.sub(r'3', '4', orig_contents)
+        with open(cpp_source_file, 'w') as f:
+          f.write(modified_contents)
+
+        modified_result_message = 'x=3, f(x)=28'
+
+        modified_pants_run = run_target('run')
+        self.assert_success(modified_pants_run)
+        self.assertIn(modified_result_message, modified_pants_run.stdout_data)
+
+        modified_pants_binary_create = run_target('binary')
+        self.assert_success(modified_pants_binary_create)
+        binary_run_output = invoke_pex_for_output(output_pex)
+        self.assertIn(modified_result_message, binary_run_output)
+
+  _include_not_found_message_for_variant = {
+    'gnu': "fatal error: some_math.h: No such file or directory",
+    'llvm': "fatal error: 'some_math.h' file not found"
+  }
+
+  def _assert_ctypes_interop_with_mock_buildroot(self, toolchain_variant):
     # TODO: consider making this mock_buildroot/run_pants_with_workdir into a
     # PantsRunIntegrationTest method!
     with self.mock_buildroot(
@@ -131,20 +186,31 @@ class CTypesIntegrationTest(PantsRunIntegrationTest):
       pants_binary_strict_deps_failure = self.run_pants_with_workdir(
         command=['binary', self._binary_target_with_interop],
         # Explicitly set to True (although this is the default).
-        config={'native-build-settings': {'strict_deps': True}},
+        config={
+          # TODO: don't make it possible to forget to add the toolchain_variant option!
+          'native-build-settings': {
+            'toolchain_variant': toolchain_variant,
+            'strict_deps': True,
+          },
+        },
         workdir=os.path.join(buildroot.new_buildroot, '.pants.d'),
         build_root=buildroot.new_buildroot)
       self.assert_failure(pants_binary_strict_deps_failure)
-      self.assertIn("fatal error: 'some_math.h' file not found",
+      self.assertIn(self._include_not_found_message_for_variant[toolchain_variant],
                     pants_binary_strict_deps_failure.stdout_data)
 
     pants_run_interop = self.run_pants(['-q', 'run', self._binary_target_with_interop], config={
       'native-build-settings': {
+        'toolchain_variant': toolchain_variant,
         'strict_deps': False,
       },
     })
     self.assert_success(pants_run_interop)
     self.assertEqual('x=3, f(x)=299\n', pants_run_interop.stdout_data)
+
+  def test_ctypes_native_language_interop(self):
+    for variant in ToolchainVariant.allowed_values:
+      self._assert_ctypes_interop_with_mock_buildroot(variant)
 
   def test_ctypes_third_party_integration(self):
     pants_binary = self.run_pants(['binary', self._binary_target_with_third_party])
