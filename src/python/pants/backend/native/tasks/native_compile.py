@@ -183,7 +183,7 @@ class NativeCompile(NativeTask, AbstractClass):
                             .get_merged_args_for_compiler_option_sets(compiler_option_sets)),
       output_dir=versioned_target.results_dir)
 
-    self.context.log.debug(compile_request)
+    self.context.log.debug(repr(compile_request))
 
     return compile_request
 
