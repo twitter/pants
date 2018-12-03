@@ -247,7 +247,8 @@ impl PathGlobIncludeEntry {
       .map(|path_glob| GlobWithSource {
         path_glob,
         source: GlobSource::ParsedInput(self.input.clone()),
-      }).collect()
+      })
+      .collect()
   }
 }
 
@@ -511,7 +512,8 @@ impl PathGlobs {
       .map(|glob| PathGlobIncludeEntry {
         input: MISSING_GLOB_SOURCE.clone(),
         globs: vec![glob],
-      }).collect();
+      })
+      .collect();
     // An empty exclude becomes EMPTY_IGNORE.
     PathGlobs::create_with_globs_and_match_behavior(
       include,
@@ -564,7 +566,8 @@ impl PosixFS {
             ))
           }
         })
-      }).map_err(|e| format!("Could not canonicalize root {:?}: {:?}", root, e))?;
+      })
+      .map_err(|e| format!("Could not canonicalize root {:?}: {:?}", root, e))?;
 
     let ignore = GitignoreStyleExcludes::create(&ignore_patterns).map_err(|e| {
       format!(
@@ -592,7 +595,8 @@ impl PosixFS {
           &dir_abs,
           get_metadata,
         )
-      }).filter(|s| match s {
+      })
+      .filter(|s| match s {
         Ok(ref s) =>
         // It would be nice to be able to ignore paths before stat'ing them, but in order to apply
         // git-style ignore patterns, we need to know whether a path represents a directory.
@@ -600,7 +604,8 @@ impl PosixFS {
           !self.ignore.is_ignored(s)
         }
         Err(_) => true,
-      }).collect::<Result<Vec<_>, io::Error>>()?;
+      })
+      .collect::<Result<Vec<_>, io::Error>>()?;
     stats.sort_by(|s1, s2| s1.path().cmp(s2.path()));
     Ok(stats)
   }
@@ -623,7 +628,8 @@ impl PosixFS {
             content: Bytes::from(content),
           })
         })
-      }).to_boxed()
+      })
+      .to_boxed()
   }
 
   pub fn read_link(&self, link: &Link) -> BoxFuture<PathBuf, io::Error> {
@@ -649,7 +655,8 @@ impl PosixFS {
               })
           }
         })
-      }).to_boxed()
+      })
+      .to_boxed()
   }
 
   ///
@@ -763,7 +770,8 @@ impl PathStatGetter<io::Error> for Arc<PosixFS> {
                 io::ErrorKind::NotFound => Ok(None),
                 _ => Err(err),
               },
-            }).and_then(move |maybe_stat| {
+            })
+            .and_then(move |maybe_stat| {
               match maybe_stat {
                 // Note: This will drop PathStats for symlinks which don't point anywhere.
                 Some(Stat::Link(link)) => fs.canonicalize(link.0.clone(), &link),
@@ -776,8 +784,10 @@ impl PathStatGetter<io::Error> for Arc<PosixFS> {
                 None => future::ok(None).to_boxed(),
               }
             })
-        }).collect::<Vec<_>>(),
-    ).to_boxed()
+        })
+        .collect::<Vec<_>>(),
+    )
+    .to_boxed()
   }
 }
 
@@ -883,7 +893,8 @@ mod posixfs_test {
       .read_file(&File {
         path: path.clone(),
         is_executable: false,
-      }).wait()
+      })
+      .wait()
       .unwrap();
     assert_eq!(file_content.path, path);
     assert_eq!(file_content.content, content);
@@ -896,7 +907,8 @@ mod posixfs_test {
       .read_file(&File {
         path: PathBuf::from("marmosets"),
         is_executable: false,
-      }).wait()
+      })
+      .wait()
       .expect_err("Expected error");
   }
 
@@ -1006,7 +1018,8 @@ mod posixfs_test {
       dir
         .path()
         .join(&dir.path().join(&remarkably_similar_marmoset)),
-    ).unwrap();
+    )
+    .unwrap();
     std::fs::create_dir(dir.path().join(&hammock)).unwrap();
     make_file(
       &dir.path().join(&hammock).join("napping_marmoset"),
@@ -1066,7 +1079,8 @@ mod posixfs_test {
     std::os::unix::fs::symlink(
       "../symlink",
       &root_path.join("dir").join("recursive_symlink"),
-    ).unwrap();
+    )
+    .unwrap();
     std::os::unix::fs::symlink("dir", &root_path.join("dir_symlink")).unwrap();
     std::os::unix::fs::symlink("doesnotexist", &root_path.join("symlink_to_nothing")).unwrap();
 
@@ -1081,7 +1095,8 @@ mod posixfs_test {
         PathBuf::from("dir_symlink"),
         PathBuf::from("symlink_to_nothing"),
         PathBuf::from("doesnotexist"),
-      ]).wait()
+      ])
+      .wait()
       .unwrap();
     let v: Vec<Option<PathStat>> = vec![
       Some(PathStat::file(
@@ -1143,6 +1158,7 @@ mod posixfs_test {
       dir.as_ref(),
       Arc::new(ResettablePool::new("test-pool-".to_string())),
       &[],
-    ).unwrap()
+    )
+    .unwrap()
   }
 }

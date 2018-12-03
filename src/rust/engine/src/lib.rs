@@ -351,7 +351,8 @@ pub extern "C" fn scheduler_metrics(
             externs::store_bytes(metric.as_bytes()),
             externs::store_i64(value),
           ])
-        }).collect::<Vec<_>>();
+        })
+        .collect::<Vec<_>>();
       externs::store_tuple(&values).into()
     })
   })
@@ -519,7 +520,8 @@ pub extern "C" fn decompress_tarball(
         output_dir_str.as_path(),
         e
       )
-    }).into()
+    })
+    .into()
 }
 
 #[no_mangle]
@@ -691,7 +693,8 @@ pub extern "C" fn capture_snapshots(
       let path_globs =
         nodes::Snapshot::lift_path_globs(&externs::project_ignoring_type(&value, "path_globs"));
       path_globs.map(|path_globs| (path_globs, root))
-    }).collect();
+    })
+    .collect();
 
   let path_globs_and_roots = match path_globs_and_roots_result {
     Ok(v) => v,
@@ -713,10 +716,13 @@ pub extern "C" fn capture_snapshots(
             core.fs_pool.clone(),
             root,
             path_globs,
-          ).map(move |snapshot| nodes::Snapshot::store_snapshot(&core, &snapshot))
-        }).collect::<Vec<_>>(),
+          )
+          .map(move |snapshot| nodes::Snapshot::store_snapshot(&core, &snapshot))
+        })
+        .collect::<Vec<_>>(),
     )
-  }).map(|values| externs::store_tuple(&values))
+  })
+  .map(|values| externs::store_tuple(&values))
   .wait()
   .into()
 }
@@ -760,7 +766,8 @@ pub extern "C" fn materialize_directories(
       let dir_digest =
         nodes::lift_digest(&externs::project_ignoring_type(&value, "directory_digest"));
       dir_digest.map(|dir_digest| (dir, dir_digest))
-    }).collect();
+    })
+    .collect();
 
   let dir_and_digests = match directories_paths_and_digests_results {
     Ok(d) => d,
@@ -777,7 +784,8 @@ pub extern "C" fn materialize_directories(
         .map(|(dir, digest)| scheduler.core.store().materialize_directory(dir, digest))
         .collect::<Vec<_>>(),
     )
-  }).map(|_| ())
+  })
+  .map(|_| ())
   .wait()
   .into()
 }

@@ -404,7 +404,8 @@ impl fuse::Filesystem for BuildResultFS {
           .map_err(|err| {
             error!("Error loading file by digest {}: {}", digest_str, err);
             libc::EINVAL
-          }).and_then(|maybe_inode| {
+          })
+          .and_then(|maybe_inode| {
             maybe_inode
               .and_then(|inode| self.file_attr_for(inode))
               .ok_or(libc::ENOENT)
@@ -437,9 +438,11 @@ impl fuse::Filesystem for BuildResultFS {
               .map_err(|err| {
                 error!("Error reading directory {:?}: {}", parent_digest, err);
                 libc::EINVAL
-              })?.and_then(|directory| self.node_for_digest(&directory, filename))
+              })?
+              .and_then(|directory| self.node_for_digest(&directory, filename))
               .ok_or(libc::ENOENT)
-          }).and_then(|node| match node {
+          })
+          .and_then(|node| match node {
             Node::Directory(directory_node) => {
               let digest_result: Result<Digest, String> = directory_node.get_digest().into();
               let digest = digest_result.map_err(|err| {
@@ -459,7 +462,8 @@ impl fuse::Filesystem for BuildResultFS {
                 .map_err(|err| {
                   error!("Error loading file by digest {}: {}", filename, err);
                   libc::EINVAL
-                }).and_then(|maybe_inode| {
+                })
+                .and_then(|maybe_inode| {
                   maybe_inode
                     .and_then(|inode| self.file_attr_for(inode))
                     .ok_or(libc::ENOENT)
@@ -524,21 +528,24 @@ impl fuse::Filesystem for BuildResultFS {
             let end = std::cmp::min(offset as usize + size as usize, bytes.len());
             let mut reply = reply.lock();
             reply.take().unwrap().data(&bytes.slice(begin, end));
-          }).map(|v| {
+          })
+          .map(|v| {
             if v.is_none() {
               let maybe_reply = reply2.lock().take();
               if let Some(reply) = maybe_reply {
                 reply.error(libc::ENOENT);
               }
             }
-          }).or_else(|err| {
+          })
+          .or_else(|err| {
             error!("Error loading bytes for {:?}: {}", digest, err);
             let maybe_reply = reply2.lock().take();
             if let Some(reply) = maybe_reply {
               reply.error(libc::EINVAL);
             }
             Ok(())
-          }).wait();
+          })
+          .wait();
         result.expect("Error from read future which should have been handled in the future ");
       }
       _ => reply.error(libc::ENOENT),
@@ -688,7 +695,8 @@ fn main() {
       std::time::Duration::from_secs(5 * 60),
     ),
     None => fs::Store::local_only(&store_path, pool),
-  }.expect("Error making store");
+  }
+  .expect("Error making store");
 
   let _fs = mount(mount_path, store).expect("Error mounting");
   loop {
@@ -734,16 +742,15 @@ mod test {
     let store = fs::Store::local_only(
       store_dir.path(),
       Arc::new(fs::ResettablePool::new("test-pool-".to_string())),
-    ).expect("Error creating local store");
+    )
+    .expect("Error creating local store");
 
     let _fs = mount(mount_dir.path(), store).expect("Mounting");
-    assert!(
-      !&mount_dir
-        .path()
-        .join("digest")
-        .join(digest_to_filepath(&TestData::roland().digest()))
-        .exists()
-    );
+    assert!(!&mount_dir
+      .path()
+      .join("digest")
+      .join(digest_to_filepath(&TestData::roland().digest()))
+      .exists());
   }
 
   #[test]
@@ -753,7 +760,8 @@ mod test {
     let store = fs::Store::local_only(
       store_dir.path(),
       Arc::new(fs::ResettablePool::new("test-pool-".to_string())),
-    ).expect("Error creating local store");
+    )
+    .expect("Error creating local store");
 
     let test_bytes = TestData::roland();
 
@@ -778,7 +786,8 @@ mod test {
     let store = fs::Store::local_only(
       store_dir.path(),
       Arc::new(fs::ResettablePool::new("test-pool-".to_string())),
-    ).expect("Error creating local store");
+    )
+    .expect("Error creating local store");
 
     let test_bytes = TestData::roland();
     let test_directory = TestDirectory::containing_roland();
@@ -807,7 +816,8 @@ mod test {
     let store = fs::Store::local_only(
       store_dir.path(),
       Arc::new(fs::ResettablePool::new("test-pool-".to_string())),
-    ).expect("Error creating local store");
+    )
+    .expect("Error creating local store");
 
     let test_bytes = TestData::roland();
     let test_directory = TestDirectory::containing_roland();
@@ -838,7 +848,8 @@ mod test {
     let store = fs::Store::local_only(
       store_dir.path(),
       Arc::new(fs::ResettablePool::new("test-pool-".to_string())),
-    ).expect("Error creating local store");
+    )
+    .expect("Error creating local store");
 
     let test_bytes = TestData::roland();
     let treat_bytes = TestData::catnip();
@@ -878,7 +889,8 @@ mod test {
     let store = fs::Store::local_only(
       store_dir.path(),
       Arc::new(fs::ResettablePool::new("test-pool-".to_string())),
-    ).expect("Error creating local store");
+    )
+    .expect("Error creating local store");
 
     let test_bytes = TestData::roland();
     let treat_bytes = TestData::catnip();
@@ -923,7 +935,8 @@ mod test {
     let store = fs::Store::local_only(
       store_dir.path(),
       Arc::new(fs::ResettablePool::new("test-pool-".to_string())),
-    ).expect("Error creating local store");
+    )
+    .expect("Error creating local store");
 
     let treat_bytes = TestData::catnip();
     let directory = TestDirectory::with_mixed_executable_files();
@@ -980,7 +993,8 @@ mod syscall_tests {
     let store = fs::Store::local_only(
       store_dir.path(),
       Arc::new(fs::ResettablePool::new("test-pool-".to_string())),
-    ).expect("Error creating local store");
+    )
+    .expect("Error creating local store");
 
     let test_bytes = TestData::roland();
 

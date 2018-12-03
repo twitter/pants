@@ -176,9 +176,11 @@ impl Store {
       directory
         .write_to_bytes()
         .map_err(|e| format!("Error serializing directory proto {:?}: {:?}", directory, e)),
-    ).and_then(move |bytes| {
+    )
+    .and_then(move |bytes| {
       local.store_bytes(EntryType::Directory, Bytes::from(bytes), initial_lease)
-    }).to_boxed()
+    })
+    .to_boxed()
   }
 
   ///
@@ -265,11 +267,14 @@ impl Store {
                         ))
                       }
                     })
-                }).to_boxed(),
+                })
+                .to_boxed(),
               None => future::ok(None).to_boxed(),
-            }).to_boxed(),
+            })
+            .to_boxed(),
         },
-      ).to_boxed()
+      )
+      .to_boxed()
   }
 
   ///
@@ -320,14 +325,16 @@ impl Store {
           }
         }
         expanded_digests
-      }).and_then(move |ingested_digests| {
+      })
+      .and_then(move |ingested_digests| {
         if Store::upload_is_faster_than_checking_whether_to_upload(&ingested_digests) {
           return Ok((ingested_digests.keys().cloned().collect(), ingested_digests));
         }
         remote
           .list_missing_digests(ingested_digests.keys())
           .map(|digests_to_upload| (digests_to_upload, ingested_digests))
-      }).and_then(move |(digests_to_upload, ingested_digests)| {
+      })
+      .and_then(move |(digests_to_upload, ingested_digests)| {
         future::join_all(
           digests_to_upload
             .into_iter()
@@ -340,10 +347,13 @@ impl Store {
                   Some(future) => Ok(future),
                   None => Err(format!("Failed to upload digest {:?}: Not found", digest)),
                 })
-            }).collect::<Vec<_>>(),
-        ).and_then(future::join_all)
+            })
+            .collect::<Vec<_>>(),
+        )
+        .and_then(future::join_all)
         .map(|uploaded_digests| (uploaded_digests, ingested_digests))
-      }).map(|(uploaded_digests, ingested_digests)| {
+      })
+      .map(|(uploaded_digests, ingested_digests)| {
         let ingested_file_sizes = ingested_digests.iter().map(|(digest, _)| digest.1);
         let uploaded_file_sizes = uploaded_digests.iter().map(|digest| digest.1);
 
@@ -353,7 +363,8 @@ impl Store {
           uploaded_file_count: uploaded_file_sizes.len(),
           uploaded_file_bytes: uploaded_file_sizes.sum(),
         }
-      }).to_boxed()
+      })
+      .to_boxed()
   }
 
   ///
@@ -366,7 +377,8 @@ impl Store {
       .load_directory(dir_digest)
       .and_then(move |directory_opt| {
         directory_opt.ok_or_else(|| format!("Could not read dir with digest {:?}", dir_digest))
-      }).and_then(move |directory| {
+      })
+      .and_then(move |directory| {
         // Traverse the files within directory
         let file_futures = directory
           .get_files()
@@ -374,7 +386,8 @@ impl Store {
           .map(|file_node| {
             let file_digest = try_future!(file_node.get_digest().into());
             store.load_bytes_with(EntryType::File, file_digest, |_| Ok(()), |_| Ok(()))
-          }).collect::<Vec<_>>();
+          })
+          .collect::<Vec<_>>();
 
         // Recursively call with sub-directories
         let directory_futures = directory
@@ -383,11 +396,13 @@ impl Store {
           .map(move |child_dir| {
             let child_digest = try_future!(child_dir.get_digest().into());
             store.ensure_local_has_recursive_directory(child_digest)
-          }).collect::<Vec<_>>();
+          })
+          .collect::<Vec<_>>();
         future::join_all(file_futures)
           .join(future::join_all(directory_futures))
           .map(|_| ())
-      }).to_boxed()
+      })
+      .to_boxed()
   }
 
   pub fn lease_all<'a, Ds: Iterator<Item = &'a Digest>>(&self, digests: Ds) -> Result<(), String> {
@@ -443,7 +458,8 @@ impl Store {
         Arc::try_unwrap(accumulator)
           .expect("Arc should have been unwrappable")
           .into_inner()
-      }).to_boxed()
+      })
+      .to_boxed()
   }
 
   fn expand_directory_helper(
@@ -472,12 +488,15 @@ impl Store {
                   try_future!(subdir.get_digest().into()),
                   accumulator.clone(),
                 )
-              }).collect::<Vec<_>>(),
-          ).map(|_| ())
+              })
+              .collect::<Vec<_>>(),
+          )
+          .map(|_| ())
           .to_boxed()
         }
         None => future::err(format!("Could not expand unknown directory: {:?}", digest)).to_boxed(),
-      }).to_boxed()
+      })
+      .to_boxed()
   }
 
   ///
@@ -495,7 +514,8 @@ impl Store {
       .load_directory(digest)
       .and_then(move |directory_opt| {
         directory_opt.ok_or_else(|| format!("Directory with digest {:?} not found", digest))
-      }).and_then(move |directory| {
+      })
+      .and_then(move |directory| {
         let file_futures = directory
           .get_files()
           .iter()
@@ -504,7 +524,8 @@ impl Store {
             let path = destination.join(file_node.get_name());
             let digest = try_future!(file_node.get_digest().into());
             store.materialize_file(path, digest, file_node.is_executable)
-          }).collect::<Vec<_>>();
+          })
+          .collect::<Vec<_>>();
         let directory_futures = directory
           .get_directories()
           .iter()
@@ -513,11 +534,13 @@ impl Store {
             let path = destination.join(directory_node.get_name());
             let digest = try_future!(directory_node.get_digest().into());
             store.materialize_directory(path, digest)
-          }).collect::<Vec<_>>();
+          })
+          .collect::<Vec<_>>();
         future::join_all(file_futures)
           .join(future::join_all(directory_futures))
           .map(|_| ())
-      }).to_boxed()
+      })
+      .to_boxed()
   }
 
   fn materialize_file(
@@ -535,11 +558,13 @@ impl Store {
           .open(&destination)
           .and_then(|mut f| f.write_all(&bytes))
           .map_err(|e| format!("Error writing file {:?}: {:?}", destination, e))
-      }).and_then(move |write_result| match write_result {
+      })
+      .and_then(move |write_result| match write_result {
         Some(Ok(())) => Ok(()),
         Some(Err(e)) => Err(e),
         None => Err(format!("File with digest {:?} not found", digest)),
-      }).to_boxed()
+      })
+      .to_boxed()
   }
 
   // Returns files sorted by their path.
@@ -558,7 +583,8 @@ impl Store {
           .collect();
         vec.sort_by(|l, r| l.path.cmp(&r.path));
         vec
-      }).to_boxed()
+      })
+      .to_boxed()
   }
 
   // Assumes that all fingerprints it encounters are valid.
@@ -587,8 +613,10 @@ impl Store {
                   let mut contents = contents_wrapped_copy.lock();
                   contents.insert(path, bytes);
                 })
-            }).to_boxed()
-        }).collect::<Vec<_>>(),
+            })
+            .to_boxed()
+        })
+        .collect::<Vec<_>>(),
     );
     let store = self.clone();
     let dir_futures = future::join_all(
@@ -608,7 +636,8 @@ impl Store {
             })
             .and_then(move |dir| store.contents_for_directory_helper(&dir, path, contents_wrapped))
             .to_boxed()
-        }).collect::<Vec<_>>(),
+        })
+        .collect::<Vec<_>>(),
     );
     file_futures.join(dir_futures).map(|(_, _)| ()).to_boxed()
   }
@@ -801,7 +830,8 @@ mod local {
                 })?;
               used_bytes -= aged_fingerprint.size_bytes;
               txn.commit()
-            }).map_err(|err| format!("Error garbage collecting: {}", err))?;
+            })
+            .map_err(|err| format!("Error garbage collecting: {}", err))?;
         }
       }
 
@@ -912,7 +942,8 @@ mod local {
             Err(KeyExist) => Ok(digest),
             Err(err) => Err(format!("Error storing digest {:?}: {}", digest, err)),
           }
-        }).to_boxed()
+        })
+        .to_boxed()
     }
 
     pub fn load_bytes_with<T: Send + 'static, F: Fn(Bytes) -> T + Send + Sync + 'static>(
@@ -1234,7 +1265,8 @@ mod local {
           Digest(
             Fingerprint::from_hex_string(
               "84d89877f0d4041efb6bf91a16f0248f2fd573e6af05c19f96bedb9f882f7882",
-            ).unwrap(),
+            )
+            .unwrap(),
             10
           )
         ),
@@ -1253,7 +1285,8 @@ mod local {
         .expect("Error storing");
       let file_fingerprint = Fingerprint::from_hex_string(
         "84d89877f0d4041efb6bf91a16f0248f2fd573e6af05c19f96bedb9f882f7882",
-      ).unwrap();
+      )
+      .unwrap();
       let file_digest = Digest(file_fingerprint, 10);
       store
         .lease_all(vec![file_digest].iter())
@@ -1274,12 +1307,14 @@ mod local {
       let bytes_1 = Bytes::from("0123456789");
       let fingerprint_1 = Fingerprint::from_hex_string(
         "84d89877f0d4041efb6bf91a16f0248f2fd573e6af05c19f96bedb9f882f7882",
-      ).unwrap();
+      )
+      .unwrap();
       let digest_1 = Digest(fingerprint_1, 10);
       let bytes_2 = Bytes::from("9876543210");
       let fingerprint_2 = Fingerprint::from_hex_string(
         "7619ee8cea49187f309616e30ecf54be072259b43760f1f550a644945d5572f2",
-      ).unwrap();
+      )
+      .unwrap();
       let digest_2 = Digest(fingerprint_2, 10);
       store
         .store_bytes(EntryType::File, bytes_1.clone(), false)
@@ -1310,12 +1345,14 @@ mod local {
       let bytes_1 = Bytes::from("0123456789");
       let fingerprint_1 = Fingerprint::from_hex_string(
         "84d89877f0d4041efb6bf91a16f0248f2fd573e6af05c19f96bedb9f882f7882",
-      ).unwrap();
+      )
+      .unwrap();
       let digest_1 = Digest(fingerprint_1, 10);
       let bytes_2 = Bytes::from("9876543210");
       let fingerprint_2 = Fingerprint::from_hex_string(
         "7619ee8cea49187f309616e30ecf54be072259b43760f1f550a644945d5572f2",
-      ).unwrap();
+      )
+      .unwrap();
       let digest_2 = Digest(fingerprint_2, 10);
       store
         .store_bytes(EntryType::File, bytes_1.clone(), false)
@@ -1688,11 +1725,11 @@ mod remote {
         if let Some(_root_ca_certs) = root_ca_certs {
           panic!("Sorry, we dropped secure grpc support until we can either make openssl link properly, or switch to tower");
         /*
-          let creds = grpcio::ChannelCredentialsBuilder::new()
-            .root_cert(root_ca_certs)
-            .build();
-          builder.secure_connect(cas_address, creds)
-          */
+        let creds = grpcio::ChannelCredentialsBuilder::new()
+          .root_cert(root_ca_certs)
+          .build();
+        builder.secure_connect(cas_address, creds)
+        */
         } else {
           builder.connect(cas_address)
         }
@@ -1748,7 +1785,8 @@ mod remote {
         Err(err) => future::err(format!(
           "Error attempting to connect to upload digest {:?}: {:?}",
           digest, err
-        )).to_boxed(),
+        ))
+        .to_boxed(),
         Ok((sender, receiver)) => {
           let chunk_size_bytes = self.chunk_size_bytes;
           let stream =
@@ -1777,14 +1815,16 @@ mod remote {
               sender.send_all(stream).map_err(move |e| {
                 format!("Error attempting to upload digest {:?}: {:?}", digest, e)
               }),
-            ).and_then(move |_| {
+            )
+            .and_then(move |_| {
               receiver.map_err(move |e| {
                 format!(
                   "Error from server when uploading digest {:?}: {:?}",
                   digest, e
                 )
               })
-            }).and_then(move |received| {
+            })
+            .and_then(move |received| {
               if received.get_committed_size() == len as i64 {
                 Ok(digest)
               } else {
@@ -1795,7 +1835,8 @@ mod remote {
                   received.get_committed_size()
                 ))
               }
-            }).to_boxed()
+            })
+            .to_boxed()
         }
       }
     }
@@ -1831,7 +1872,8 @@ mod remote {
                 bytes.extend_from_slice(&r.data);
                 future::ok::<_, grpcio::Error>(bytes)
               }),
-            ).map(|(_client, bytes)| Some(bytes.freeze()))
+            )
+            .map(|(_client, bytes)| Some(bytes.freeze()))
             .or_else(|e| match e {
               grpcio::Error::RpcFailure(grpcio::RpcStatus {
                 status: grpcio::RpcStatusCode::NotFound,
@@ -1841,13 +1883,15 @@ mod remote {
                 "Error from server in response to CAS read request: {:?}",
                 e
               )),
-            }).map(move |maybe_bytes| maybe_bytes.map(f))
+            })
+            .map(move |maybe_bytes| maybe_bytes.map(f))
             .to_boxed()
         }
         Err(err) => future::err(format!(
           "Error making CAS read request for {:?}: {:?}",
           digest, err
-        )).to_boxed(),
+        ))
+        .to_boxed(),
       }
     }
 
@@ -1874,7 +1918,8 @@ mod remote {
             "Error from server in response to find_missing_blobs_request: {:?}",
             err
           )
-        }).and_then(|response| {
+        })
+        .and_then(|response| {
           response
             .get_missing_blob_digests()
             .iter()
@@ -1962,7 +2007,8 @@ mod remote {
       let error = load_directory_proto_bytes(
         &new_byte_store(&cas),
         TestDirectory::containing_roland().digest(),
-      ).expect_err("Want error");
+      )
+      .expect_err("Want error");
       assert!(
         error.contains("StubCAS is configured to always fail"),
         format!("Bad error message, got: {}", error)
@@ -2240,7 +2286,8 @@ mod tests {
       PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("testdata")
         .join("all_the_henries"),
-    ).expect("Error opening all_the_henries");
+    )
+    .expect("Error opening all_the_henries");
     let mut bytes = Vec::new();
     f.read_to_end(&mut bytes)
       .expect("Error reading all_the_henries");
@@ -2299,7 +2346,8 @@ mod tests {
       1,
       10 * 1024 * 1024,
       Duration::from_secs(1),
-    ).unwrap()
+    )
+    .unwrap()
   }
 
   #[test]
@@ -2470,7 +2518,8 @@ mod tests {
     let error = load_file_bytes(
       &new_store(dir.path(), cas.address()),
       TestData::roland().digest(),
-    ).expect_err("Want error");
+    )
+    .expect_err("Want error");
     assert_eq!(1, cas.read_request_count());
     assert!(
       error.contains("StubCAS is configured to always fail"),
@@ -2545,7 +2594,8 @@ mod tests {
       .unverified_content(
         non_canonical_directory_fingerprint.clone(),
         non_canonical_directory_bytes,
-      ).build();
+      )
+      .build();
     new_store(dir.path(), cas.address())
       .load_directory(directory_digest.clone())
       .wait()
@@ -2570,7 +2620,8 @@ mod tests {
       .unverified_content(
         testdata.fingerprint(),
         TestDirectory::containing_roland().bytes(),
-      ).build();
+      )
+      .build();
     load_file_bytes(&new_store(dir.path(), cas.address()), testdata.digest())
       .expect_err("Want error");
 
@@ -2590,7 +2641,8 @@ mod tests {
       .unverified_content(
         testdir.fingerprint(),
         TestDirectory::containing_roland().bytes(),
-      ).build();
+      )
+      .build();
     load_file_bytes(&new_store(dir.path(), cas.address()), testdir.digest())
       .expect_err("Want error");
 
@@ -2635,7 +2687,8 @@ mod tests {
     let want: HashMap<Digest, EntryType> = vec![
       (testdir.digest(), EntryType::Directory),
       (roland.digest(), EntryType::File),
-    ].into_iter()
+    ]
+    .into_iter()
     .collect();
     assert_eq!(expanded, want);
   }
@@ -2667,7 +2720,8 @@ mod tests {
       (testdir.digest(), EntryType::Directory),
       (roland.digest(), EntryType::File),
       (catnip.digest(), EntryType::File),
-    ].into_iter()
+    ]
+    .into_iter()
     .collect();
     assert_eq!(expanded, want);
   }
@@ -3002,7 +3056,8 @@ mod tests {
       1,
       10 * 1024 * 1024,
       Duration::from_secs(1),
-    ).unwrap();
+    )
+    .unwrap();
 
     store_with_remote
       .ensure_remote_has_recursive(vec![testdir.digest()])
@@ -3028,7 +3083,8 @@ mod tests {
       1,
       10 * 1024 * 1024,
       Duration::from_secs(1),
-    ).unwrap();
+    )
+    .unwrap();
 
     assert_eq!(
       store_with_remote
@@ -3071,7 +3127,8 @@ mod tests {
       1,
       10 * 1024 * 1024,
       Duration::from_secs(1),
-    ).unwrap();
+    )
+    .unwrap();
 
     store_with_remote
       .ensure_remote_has_recursive(vec![testdir.digest()])
@@ -3097,7 +3154,8 @@ mod tests {
       1,
       10 * 1024 * 1024,
       Duration::from_secs(1),
-    ).unwrap();
+    )
+    .unwrap();
 
     assert_eq!(
       store_with_remote
@@ -3172,7 +3230,8 @@ mod tests {
       .materialize_directory(
         materialize_dir.path().to_owned(),
         TestDirectory::recursive().digest(),
-      ).wait()
+      )
+      .wait()
       .expect_err("Want unknown digest error");
   }
 
@@ -3208,7 +3267,8 @@ mod tests {
       .materialize_directory(
         materialize_dir.path().to_owned(),
         recursive_testdir.digest(),
-      ).wait()
+      )
+      .wait()
       .expect("Error materializing");
 
     assert_eq!(list_dir(materialize_dir.path()), vec!["cats", "treats"]);
@@ -3363,7 +3423,8 @@ mod tests {
           .file_name()
           .to_string_lossy()
           .to_string()
-      }).collect();
+      })
+      .collect();
     v.sort();
     v
   }

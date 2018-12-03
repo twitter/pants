@@ -65,12 +65,10 @@ impl CommandRunner {
     &self,
     execute_request: &Arc<bazel_protos::remote_execution::ExecuteRequest>,
   ) -> BoxFuture<OperationOrStatus, String> {
-    let stream = try_future!(
-      self
-        .execution_client
-        .execute_opt(&execute_request, self.call_option())
-        .map_err(rpcerror_to_string)
-    );
+    let stream = try_future!(self
+      .execution_client
+      .execute_opt(&execute_request, self.call_option())
+      .map_err(rpcerror_to_string));
     stream
       .take(1)
       .into_future()
@@ -85,13 +83,15 @@ impl CommandRunner {
       .map_err(|(error, stream)| {
         drop(stream);
         error
-      }).then(|maybe_operation_result| match maybe_operation_result {
+      })
+      .then(|maybe_operation_result| match maybe_operation_result {
         Ok(Some(operation)) => Ok(OperationOrStatus::Operation(operation)),
         Ok(None) => {
           Err("Didn't get proper stream response from server during remote execution".to_owned())
         }
         Err(err) => rpcerror_to_status_or_string(err).map(OperationOrStatus::Status),
-      }).to_boxed()
+      })
+      .to_boxed()
   }
 }
 
@@ -168,13 +168,12 @@ impl super::CommandRunner for CommandRunner {
                         missing_digests
                       );
                       let execute_request = execute_request2.clone();
-                      store.ensure_remote_has_recursive(missing_digests)
-                              .and_then(move |_| {
-                                command_runner2.oneshot_execute(&execute_request)
-                              })
-                              // Reset `iter_num` on `MissingDigests`
-                              .map(|operation| future::Loop::Continue((operation, 0)))
-                              .to_boxed()
+                      store
+                        .ensure_remote_has_recursive(missing_digests)
+                        .and_then(move |_| command_runner2.oneshot_execute(&execute_request))
+                        // Reset `iter_num` on `MissingDigests`
+                        .map(|operation| future::Loop::Continue((operation, 0)))
+                        .to_boxed()
                     }
                     ExecutionError::NotFinished(operation_name) => {
                       let mut operation_request =
@@ -193,7 +192,8 @@ impl super::CommandRunner for CommandRunner {
                         future::err(format!(
                           "Exceeded time out of {:?} with {:?} for operation {}, {}",
                           timeout, elapsed, operation_name, description
-                        )).to_boxed()
+                        ))
+                        .to_boxed()
                       } else {
                         // maybe the delay here should be the min of remaining time and the backoff period
                         Delay::new(Duration::from_millis(backoff_period))
@@ -206,16 +206,18 @@ impl super::CommandRunner for CommandRunner {
                           .and_then(move |_| {
                             future::done(
                               operations_client
-                                .get_operation_opt(&operation_request, command_runner3.call_option())
+                                .get_operation_opt(
+                                  &operation_request,
+                                  command_runner3.call_option(),
+                                )
                                 .or_else(move |err| {
                                   rpcerror_recover_cancelled(operation_request.take_name(), err)
                                 })
                                 .map(OperationOrStatus::Operation)
                                 .map_err(rpcerror_to_string),
-                            ).map(move |operation| {
-                              future::Loop::Continue((operation, iter_num + 1))
-                            })
-                              .to_boxed()
+                            )
+                            .map(move |operation| future::Loop::Continue((operation, iter_num + 1)))
+                            .to_boxed()
                           })
                           .to_boxed()
                       }
@@ -250,11 +252,11 @@ impl CommandRunner {
       if let Some(_root_ca_certs) = root_ca_certs {
         panic!("Sorry, we dropped secure grpc support until we can either make openssl link properly, or switch to tower");
       /*
-        let creds = grpcio::ChannelCredentialsBuilder::new()
-          .root_cert(root_ca_certs)
-          .build();
-        builder.secure_connect(address, creds)
-        */
+      let creds = grpcio::ChannelCredentialsBuilder::new()
+        .root_cert(root_ca_certs)
+        .build();
+      builder.secure_connect(address, creds)
+      */
       } else {
         builder.connect(address)
       }
@@ -297,7 +299,8 @@ impl CommandRunner {
       proto
         .write_to_bytes()
         .map_err(|e| format!("Error serializing proto {:?}", e)),
-    ).and_then(move |command_bytes| store.store_file_bytes(Bytes::from(command_bytes), true))
+    )
+    .and_then(move |command_bytes| store.store_file_bytes(Bytes::from(command_bytes), true))
     .map_err(|e| format!("Error saving digest to local store: {:?}", e))
     .and_then(move |digest| {
       // TODO: Tune when we upload the proto.
@@ -305,7 +308,8 @@ impl CommandRunner {
         .ensure_remote_has_recursive(vec![digest])
         .map_err(|e| format!("Error uploading proto {:?}", e))
         .map(|_| ())
-    }).to_boxed()
+    })
+    .to_boxed()
   }
 
   fn extract_execute_response(
@@ -327,15 +331,14 @@ impl CommandRunner {
         if !operation.has_response() {
           return future::err(ExecutionError::Fatal(
             "Operation finished but no response supplied".to_string(),
-          )).to_boxed();
+          ))
+          .to_boxed();
         }
 
         let mut execute_response = bazel_protos::remote_execution::ExecuteResponse::new();
-        try_future!(
-          execute_response
-            .merge_from_bytes(operation.get_response().get_value())
-            .map_err(|e| ExecutionError::Fatal(format!("Invalid ExecuteResponse: {:?}", e)))
-        );
+        try_future!(execute_response
+          .merge_from_bytes(operation.get_response().get_value())
+          .map_err(|e| ExecutionError::Fatal(format!("Invalid ExecuteResponse: {:?}", e))));
         // TODO: Log less verbosely
         debug!("Got (nested) execute response: {:?}", execute_response);
 
@@ -352,7 +355,8 @@ impl CommandRunner {
                 exit_code: execute_response.get_result().get_exit_code(),
                 output_directory: output_directory,
               })
-            }).to_boxed();
+            })
+            .to_boxed();
         }
         status
       }
@@ -366,29 +370,31 @@ impl CommandRunner {
           return future::err(ExecutionError::Fatal(format!(
             "Received multiple details in FailedPrecondition ExecuteResponse's status field: {:?}",
             status.get_details()
-          ))).to_boxed();
+          )))
+          .to_boxed();
         }
         let details = status.get_details().get(0).unwrap();
         let mut precondition_failure = bazel_protos::error_details::PreconditionFailure::new();
-        if details.get_type_url() != format!(
-          "type.googleapis.com/{}",
-          precondition_failure.descriptor().full_name()
-        ) {
+        if details.get_type_url()
+          != format!(
+            "type.googleapis.com/{}",
+            precondition_failure.descriptor().full_name()
+          )
+        {
           return future::err(ExecutionError::Fatal(format!(
             "Received FailedPrecondition, but didn't know how to resolve it: {},\
              protobuf type {}",
             status.get_message(),
             details.get_type_url()
-          ))).to_boxed();
+          )))
+          .to_boxed();
         }
-        try_future!(
-          precondition_failure
-            .merge_from_bytes(details.get_value())
-            .map_err(|e| ExecutionError::Fatal(format!(
-              "Error deserializing FailedPrecondition proto: {:?}",
-              e
-            )))
-        );
+        try_future!(precondition_failure
+          .merge_from_bytes(details.get_value())
+          .map_err(|e| ExecutionError::Fatal(format!(
+            "Error deserializing FailedPrecondition proto: {:?}",
+            e
+          ))));
 
         let mut missing_digests = Vec::with_capacity(precondition_failure.get_violations().len());
 
@@ -397,35 +403,36 @@ impl CommandRunner {
             return future::err(ExecutionError::Fatal(format!(
               "Didn't know how to process PreconditionFailure violation: {:?}",
               violation
-            ))).to_boxed();
+            )))
+            .to_boxed();
           }
           let parts: Vec<_> = violation.get_subject().split('/').collect();
           if parts.len() != 3 || parts[0] != "blobs" {
             return future::err(ExecutionError::Fatal(format!(
               "Received FailedPrecondition MISSING but didn't recognize subject {}",
               violation.get_subject()
-            ))).to_boxed();
+            )))
+            .to_boxed();
           }
           let digest =
             Digest(
               try_future!(Fingerprint::from_hex_string(parts[1]).map_err(|e| {
                 ExecutionError::Fatal(format!("Bad digest in missing blob: {}: {}", parts[1], e))
               })),
-              try_future!(
-                parts[2]
-                  .parse::<usize>()
-                  .map_err(|e| ExecutionError::Fatal(format!(
-                    "Missing blob had bad size: {}: {}",
-                    parts[2], e
-                  )))
-              ),
+              try_future!(parts[2]
+                .parse::<usize>()
+                .map_err(|e| ExecutionError::Fatal(format!(
+                  "Missing blob had bad size: {}: {}",
+                  parts[2], e
+                )))),
             );
           missing_digests.push(digest);
         }
         if missing_digests.is_empty() {
           return future::err(ExecutionError::Fatal(
             "Error from remote execution: FailedPrecondition, but no details".to_owned(),
-          )).to_boxed();
+          ))
+          .to_boxed();
         }
         future::err(ExecutionError::MissingDigests(missing_digests)).to_boxed()
       }
@@ -433,8 +440,10 @@ impl CommandRunner {
         "Error from remote execution: {:?}: {:?}",
         code,
         status.get_message()
-      ))).to_boxed(),
-    }.to_boxed()
+      )))
+      .to_boxed(),
+    }
+    .to_boxed()
   }
 
   fn extract_stdout(
@@ -444,10 +453,8 @@ impl CommandRunner {
     if execute_response.get_result().has_stdout_digest() {
       let stdout_digest_result: Result<Digest, String> =
         execute_response.get_result().get_stdout_digest().into();
-      let stdout_digest = try_future!(
-        stdout_digest_result
-          .map_err(|err| ExecutionError::Fatal(format!("Error extracting stdout: {}", err)))
-      );
+      let stdout_digest = try_future!(stdout_digest_result
+        .map_err(|err| ExecutionError::Fatal(format!("Error extracting stdout: {}", err))));
       self
         .store
         .load_file_bytes_with(stdout_digest, |v| v)
@@ -456,14 +463,16 @@ impl CommandRunner {
             "Error fetching stdout digest ({:?}): {:?}",
             stdout_digest, error
           ))
-        }).and_then(move |maybe_value| {
+        })
+        .and_then(move |maybe_value| {
           maybe_value.ok_or_else(|| {
             ExecutionError::Fatal(format!(
               "Couldn't find stdout digest ({:?}), when fetching.",
               stdout_digest
             ))
           })
-        }).to_boxed()
+        })
+        .to_boxed()
     } else {
       let stdout_raw = Bytes::from(execute_response.get_result().get_stdout_raw());
       let stdout_copy = stdout_raw.clone();
@@ -472,7 +481,8 @@ impl CommandRunner {
         .store_file_bytes(stdout_raw, true)
         .map_err(move |error| {
           ExecutionError::Fatal(format!("Error storing raw stdout: {:?}", error))
-        }).map(|_| stdout_copy)
+        })
+        .map(|_| stdout_copy)
         .to_boxed()
     }
   }
@@ -484,10 +494,8 @@ impl CommandRunner {
     if execute_response.get_result().has_stderr_digest() {
       let stderr_digest_result: Result<Digest, String> =
         execute_response.get_result().get_stderr_digest().into();
-      let stderr_digest = try_future!(
-        stderr_digest_result
-          .map_err(|err| ExecutionError::Fatal(format!("Error extracting stderr: {}", err)))
-      );
+      let stderr_digest = try_future!(stderr_digest_result
+        .map_err(|err| ExecutionError::Fatal(format!("Error extracting stderr: {}", err))));
       self
         .store
         .load_file_bytes_with(stderr_digest, |v| v)
@@ -496,14 +504,16 @@ impl CommandRunner {
             "Error fetching stderr digest ({:?}): {:?}",
             stderr_digest, error
           ))
-        }).and_then(move |maybe_value| {
+        })
+        .and_then(move |maybe_value| {
           maybe_value.ok_or_else(|| {
             ExecutionError::Fatal(format!(
               "Couldn't find stderr digest ({:?}), when fetching.",
               stderr_digest
             ))
           })
-        }).to_boxed()
+        })
+        .to_boxed()
     } else {
       let stderr_raw = Bytes::from(execute_response.get_result().get_stderr_raw());
       let stderr_copy = stderr_raw.clone();
@@ -512,7 +522,8 @@ impl CommandRunner {
         .store_file_bytes(stderr_raw, true)
         .map_err(move |error| {
           ExecutionError::Fatal(format!("Error storing raw stderr: {:?}", error))
-        }).map(|_| stderr_copy)
+        })
+        .map(|_| stderr_copy)
         .to_boxed()
     }
   }
@@ -546,7 +557,8 @@ impl CommandRunner {
               node
             });
             store.record_directory(&directory, true)
-          }).to_boxed();
+          })
+          .to_boxed();
       }
       directory_digests.push(digest.map_err(|err| {
         ExecutionError::Fatal(format!("Error saving remote output directory: {}", err))
@@ -570,7 +582,8 @@ impl CommandRunner {
             is_executable: output_file.get_is_executable(),
           },
         ))
-      }).collect();
+      })
+      .collect();
 
     let path_stats = try_future!(path_stats_result.map_err(ExecutionError::Fatal));
 
@@ -595,7 +608,8 @@ impl CommandRunner {
             "Didn't know digest for path in remote execution response: {:?}",
             file.path
           )),
-        }.to_boxed()
+        }
+        .to_boxed()
       }
     }
 
@@ -604,12 +618,14 @@ impl CommandRunner {
       self.store.clone(),
       &StoreOneOffRemoteDigest::new(path_map),
       &path_stats,
-    ).map_err(move |error| {
+    )
+    .map_err(move |error| {
       ExecutionError::Fatal(format!(
         "Error when storing the output file directory info in the remote CAS: {:?}",
         error
       ))
-    }).join(future::join_all(directory_digests))
+    })
+    .join(future::join_all(directory_digests))
     .and_then(|(files_digest, mut directory_digests)| {
       directory_digests.push(files_digest);
       fs::Snapshot::merge_directories(store, directory_digests).map_err(|err| {
@@ -618,7 +634,8 @@ impl CommandRunner {
           err
         ))
       })
-    }).to_boxed()
+    })
+    .to_boxed()
   }
 }
 
@@ -661,7 +678,8 @@ fn make_execute_request(
       p.to_str()
         .map(|s| s.to_owned())
         .ok_or_else(|| format!("Non-UTF8 output file path: {:?}", p))
-    }).collect::<Result<Vec<String>, String>>()?;
+    })
+    .collect::<Result<Vec<String>, String>>()?;
   output_files.sort();
   command.set_output_files(protobuf::RepeatedField::from_vec(output_files));
 
@@ -672,7 +690,8 @@ fn make_execute_request(
       p.to_str()
         .map(|s| s.to_owned())
         .ok_or_else(|| format!("Non-UTF8 output directory path: {:?}", p))
-    }).collect::<Result<Vec<String>, String>>()?;
+    })
+    .collect::<Result<Vec<String>, String>>()?;
   output_directories.sort();
   command.set_output_directories(protobuf::RepeatedField::from_vec(output_directories));
 
@@ -866,7 +885,8 @@ mod tests {
       (&Digest(
         Fingerprint::from_hex_string(
           "cc4ddd3085aaffbe0abce22f53b30edbb59896bb4a4f0d76219e48070cd0afe1",
-        ).unwrap(),
+        )
+        .unwrap(),
         72,
       ))
         .into(),
@@ -878,7 +898,8 @@ mod tests {
       (&Digest(
         Fingerprint::from_hex_string(
           "844c929423444f3392e0dcc89ebf1febbfdf3a2e2fcab7567cc474705a5385e4",
-        ).unwrap(),
+        )
+        .unwrap(),
         140,
       ))
         .into(),
@@ -937,7 +958,8 @@ mod tests {
       (&Digest(
         Fingerprint::from_hex_string(
           "cc4ddd3085aaffbe0abce22f53b30edbb59896bb4a4f0d76219e48070cd0afe1",
-        ).unwrap(),
+        )
+        .unwrap(),
         72,
       ))
         .into(),
@@ -950,7 +972,8 @@ mod tests {
       (&Digest(
         Fingerprint::from_hex_string(
           "844c929423444f3392e0dcc89ebf1febbfdf3a2e2fcab7567cc474705a5385e4",
-        ).unwrap(),
+        )
+        .unwrap(),
         140,
       ))
         .into(),
@@ -1015,7 +1038,8 @@ mod tests {
       (&Digest(
         Fingerprint::from_hex_string(
           "1a95e3482dd235593df73dc12b808ec7d922733a40d97d8233c1a32c8610a56d",
-        ).unwrap(),
+        )
+        .unwrap(),
         109,
       ))
         .into(),
@@ -1027,7 +1051,8 @@ mod tests {
       (&Digest(
         Fingerprint::from_hex_string(
           "0ee5d4c8ac12513a87c8d949c6883ac533a264d30215126af71a9028c4ab6edf",
-        ).unwrap(),
+        )
+        .unwrap(),
         140,
       ))
         .into(),
@@ -1068,7 +1093,8 @@ mod tests {
       (&Digest(
         Fingerprint::from_hex_string(
           "f373f421b328ddeedfba63542845c0423d7730f428dd8e916ec6a38243c98448",
-        ).unwrap(),
+        )
+        .unwrap(),
         38,
       ))
         .into(),
@@ -1080,7 +1106,8 @@ mod tests {
       (&Digest(
         Fingerprint::from_hex_string(
           "b1fb7179ce496995a4e3636544ec000dca1b951f1f6216493f6c7608dc4dd910",
-        ).unwrap(),
+        )
+        .unwrap(),
         140,
       ))
         .into(),
@@ -1112,7 +1139,8 @@ mod tests {
           },
           &None,
           &None,
-        ).unwrap()
+        )
+        .unwrap()
         .2,
         vec![],
       ))
@@ -1174,7 +1202,8 @@ mod tests {
           StdoutType::Digest(testdata.digest()),
           StderrType::Raw(testdata_empty.string()),
           0,
-        ).op
+        )
+        .op
         .unwrap()
         .unwrap()
       ),
@@ -1199,7 +1228,8 @@ mod tests {
           StdoutType::Raw(testdata_empty.string()),
           StderrType::Digest(testdata.digest()),
           0,
-        ).op
+        )
+        .op
         .unwrap()
         .unwrap()
       ),
@@ -1248,7 +1278,8 @@ mod tests {
       1,
       10 * 1024 * 1024,
       Duration::from_secs(1),
-    ).expect("Failed to make store");
+    )
+    .expect("Failed to make store");
 
     let cmd_runner = CommandRunner::new(&mock_server.address(), None, None, None, None, 1, store);
     let result = cmd_runner.run(echo_roland_request()).wait();
@@ -1265,7 +1296,8 @@ mod tests {
     let local_store = fs::Store::local_only(
       &store_dir_path,
       Arc::new(fs::ResettablePool::new("test-pool-".to_string())),
-    ).expect("Error creating local store");
+    )
+    .expect("Error creating local store");
     {
       assert_eq!(
         local_store
@@ -1598,7 +1630,8 @@ mod tests {
       1,
       10 * 1024 * 1024,
       Duration::from_secs(1),
-    ).expect("Failed to make store");
+    )
+    .expect("Failed to make store");
     store
       .store_file_bytes(roland.bytes(), false)
       .wait()
@@ -1637,7 +1670,8 @@ mod tests {
         status_proto_bytes: Some(
           make_precondition_failure_status(vec![missing_preconditionfailure_violation(
             &roland.digest(),
-          )]).write_to_bytes()
+          )])
+          .write_to_bytes()
           .unwrap(),
         ),
       };
@@ -1677,7 +1711,8 @@ mod tests {
       1,
       10 * 1024 * 1024,
       Duration::from_secs(1),
-    ).expect("Failed to make store");
+    )
+    .expect("Failed to make store");
     store
       .store_file_bytes(roland.bytes(), false)
       .wait()
@@ -1737,7 +1772,8 @@ mod tests {
       1,
       10 * 1024 * 1024,
       Duration::from_secs(1),
-    ).expect("Failed to make store");
+    )
+    .expect("Failed to make store");
 
     let error = CommandRunner::new(&mock_server.address(), None, None, None, None, 1, store)
       .run(cat_roland_request())
@@ -2162,7 +2198,8 @@ mod tests {
       Ok(Digest(
         Fingerprint::from_hex_string(
           "639b4b84bb58a9353d49df8122e7987baf038efe54ed035e67910846c865b1e2"
-        ).unwrap(),
+        )
+        .unwrap(),
         159
       ))
     )
@@ -2303,7 +2340,8 @@ mod tests {
       1,
       10 * 1024 * 1024,
       Duration::from_secs(1),
-    ).expect("Failed to make store");
+    )
+    .expect("Failed to make store");
 
     CommandRunner::new(&address, None, None, None, None, 1, store)
   }
