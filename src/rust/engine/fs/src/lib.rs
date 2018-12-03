@@ -49,7 +49,7 @@ use futures_cpupool;
 
 use grpcio;
 
-use ignore;
+use ::ignore;
 use indexmap;
 
 use lmdb;
