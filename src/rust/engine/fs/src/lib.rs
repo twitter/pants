@@ -31,15 +31,15 @@
 #![cfg_attr(feature = "cargo-clippy", allow(mutex_atomic))]
 
 mod glob_matching;
-pub use glob_matching::GlobMatching;
+pub use crate::glob_matching::GlobMatching;
 mod snapshot;
-pub use snapshot::{
+pub use crate::snapshot::{
   OneOffStoreFileByDigest, Snapshot, StoreFileByDigest, EMPTY_DIGEST, EMPTY_FINGERPRINT,
 };
 mod store;
-pub use store::{ShrinkBehavior, Store, UploadSummary, DEFAULT_LOCAL_STORE_GC_TARGET_BYTES};
+pub use crate::store::{ShrinkBehavior, Store, UploadSummary, DEFAULT_LOCAL_STORE_GC_TARGET_BYTES};
 mod pool;
-pub use pool::ResettablePool;
+pub use crate::pool::ResettablePool;
 
 extern crate bazel_protos;
 extern crate boxfuture;
@@ -835,7 +835,7 @@ pub fn safe_create_dir_all_ioerror(path: &Path) -> Result<(), io::Error> {
     Err(e) => return Err(e),
   }
   match path.parent() {
-    Some(p) => try!(safe_create_dir_all_ioerror(p)),
+    Some(p) => r#try!(safe_create_dir_all_ioerror(p)),
     None => return Ok(()),
   }
   match fs::create_dir(path) {

@@ -40,8 +40,8 @@ extern crate petgraph;
 mod entry;
 mod node;
 
-pub use entry::Entry;
-use entry::{EntryKey, Generation, RunToken};
+pub use crate::entry::Entry;
+use crate::entry::{EntryKey, Generation, RunToken};
 
 use std::collections::binary_heap::BinaryHeap;
 use std::collections::{HashMap, HashSet, VecDeque};
@@ -60,7 +60,7 @@ use petgraph::visit::EdgeRef;
 use petgraph::Direction;
 
 use boxfuture::{BoxFuture, Boxable};
-pub use node::{EntryId, Node, NodeContext, NodeError, NodeTracer, NodeVisualizer};
+pub use crate::node::{EntryId, Node, NodeContext, NodeError, NodeTracer, NodeVisualizer};
 
 type FNV = BuildHasherDefault<FnvHasher>;
 
@@ -227,16 +227,16 @@ impl<N: Node> InnerGraph<N> {
     roots: &[N],
     path: &Path,
   ) -> io::Result<()> {
-    let file = try!(File::create(path));
+    let file = r#try!(File::create(path));
     let mut f = BufWriter::new(file);
 
-    try!(f.write_all(b"digraph plans {\n"));
-    try!(f.write_fmt(format_args!(
+    r#try!(f.write_all(b"digraph plans {\n"));
+    r#try!(f.write_fmt(format_args!(
       "  node[colorscheme={}];\n",
       visualizer.color_scheme()
     ),));
-    try!(f.write_all(b"  concentrate=true;\n"));
-    try!(f.write_all(b"  rankdir=TB;\n"));
+    r#try!(f.write_all(b"  concentrate=true;\n"));
+    r#try!(f.write_all(b"  rankdir=TB;\n"));
 
     let mut format_color = |entry: &Entry<N>| visualizer.color(entry);
 
@@ -251,7 +251,7 @@ impl<N: Node> InnerGraph<N> {
       let node_str = entry.format();
 
       // Write the node header.
-      try!(f.write_fmt(format_args!(
+      r#try!(f.write_fmt(format_args!(
         "  \"{}\" [style=filled, fillcolor={}];\n",
         node_str,
         format_color(entry)
@@ -262,11 +262,11 @@ impl<N: Node> InnerGraph<N> {
 
         // Write an entry per edge.
         let dep_str = dep_entry.format();
-        try!(f.write_fmt(format_args!("    \"{}\" -> \"{}\"\n", node_str, dep_str)));
+        r#try!(f.write_fmt(format_args!("    \"{}\" -> \"{}\"\n", node_str, dep_str)));
       }
     }
 
-    try!(f.write_all(b"}\n"));
+    r#try!(f.write_all(b"}\n"));
     Ok(())
   }
 
@@ -366,7 +366,7 @@ impl<N: Node> InnerGraph<N> {
     path: &[EntryId],
     file_path: &Path,
   ) -> io::Result<()> {
-    let file = try!(OpenOptions::new().append(true).open(file_path));
+    let file = r#try!(OpenOptions::new().append(true).open(file_path));
     let mut f = BufWriter::new(file);
 
     let format = |eid: EntryId, depth: usize, is_last: bool| -> String {
@@ -387,14 +387,14 @@ impl<N: Node> InnerGraph<N> {
 
     let mut path_iter = path.iter().enumerate().peekable();
     while let Some((depth, id)) = path_iter.next() {
-      try!(writeln!(
+      r#try!(writeln!(
         &mut f,
         "{}",
         format(*id, depth, path_iter.peek().is_none())
       ));
     }
 
-    try!(f.write_all(b"\n"));
+    r#try!(f.write_all(b"\n"));
     Ok(())
   }
 

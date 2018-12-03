@@ -9,15 +9,15 @@ use std::time::Duration;
 
 use futures::future::{self, Future};
 
-use context::{Context, Core};
-use core::{Failure, Key, Params, TypeConstraint, TypeId, Value};
+use crate::context::{Context, Core};
+use crate::core::{Failure, Key, Params, TypeConstraint, TypeId, Value};
 use graph::{EntryId, Graph, InvalidationResult, Node, NodeContext};
 use indexmap::IndexMap;
 use log::{debug, info, warn};
-use nodes::{NodeKey, Select, Tracer, TryInto, Visualizer};
+use crate::nodes::{NodeKey, Select, Tracer, TryInto, Visualizer};
 use parking_lot::Mutex;
-use rule_graph;
-use selectors;
+use crate::rule_graph;
+use crate::selectors;
 use ui::EngineDisplay;
 
 ///

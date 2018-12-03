@@ -1,4 +1,4 @@
-use FileContent;
+use crate::FileContent;
 
 use bazel_protos;
 use boxfuture::{try_future, BoxFuture, Boxable};
@@ -17,7 +17,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use parking_lot::Mutex;
-use pool::ResettablePool;
+use crate::pool::ResettablePool;
 
 // This is the maximum size any particular local LMDB store file is allowed to grow to.
 // It doesn't reflect space allocated on disk, or RAM allocated (it may be reflected in VIRT but
@@ -676,7 +676,7 @@ mod local {
 
   use super::super::EMPTY_DIGEST;
   use super::MAX_LOCAL_STORE_SIZE_BYTES;
-  use pool::ResettablePool;
+  use crate::pool::ResettablePool;
 
   #[derive(Clone)]
   pub struct ByteStore {
@@ -2258,7 +2258,7 @@ mod tests {
   use futures::Future;
   use hashing::{Digest, Fingerprint};
   use mock::StubCAS;
-  use pool::ResettablePool;
+  use crate::pool::ResettablePool;
   use protobuf::Message;
   use sha2::Sha256;
   use std;

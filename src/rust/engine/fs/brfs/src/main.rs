@@ -983,7 +983,7 @@ mod syscall_tests {
   use std::ffi::CString;
   use std::path::Path;
   use std::sync::Arc;
-  use test::make_dirs;
+  use crate::test::make_dirs;
   use testutil::data::TestData;
 
   #[test]

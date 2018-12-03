@@ -1,5 +1,5 @@
 use protobuf;
-use remote_execution;
+use crate::remote_execution;
 
 use std::collections::HashSet;
 

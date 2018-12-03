@@ -79,9 +79,9 @@ use std::panic;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-use context::Core;
-use core::{Function, Key, TypeConstraint, TypeId, Value};
-use externs::{
+use crate::context::Core;
+use crate::core::{Function, Key, TypeConstraint, TypeId, Value};
+use crate::externs::{
   Buffer, BufferBuffer, CallExtern, CloneValExtern, CreateExceptionExtern, DropHandlesExtern,
   EqualsExtern, EvalExtern, ExternContext, Externs, GeneratorSendExtern, IdentifyExtern, LogExtern,
   ProjectIgnoringTypeExtern, ProjectMultiExtern, PyResult, SatisfiedByExtern,
@@ -89,13 +89,13 @@ use externs::{
   TypeIdBuffer, TypeToStrExtern, ValToStrExtern,
 };
 use futures::Future;
-use handles::Handle;
+use crate::handles::Handle;
 use hashing::Digest;
 use log::error;
-use rule_graph::{GraphMaker, RuleGraph};
-use scheduler::{ExecutionRequest, RootResult, Scheduler, Session};
-use tasks::Tasks;
-use types::Types;
+use crate::rule_graph::{GraphMaker, RuleGraph};
+use crate::scheduler::{ExecutionRequest, RootResult, Scheduler, Session};
+use crate::tasks::Tasks;
+use crate::types::Types;
 
 // TODO: Consider renaming and making generic for collections of PyResults.
 #[repr(C)]
