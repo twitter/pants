@@ -26,7 +26,6 @@ use clap;
 use env_logger;
 use fs;
 
-
 use process_execution;
 
 use clap::{value_t, App, AppSettings, Arg};

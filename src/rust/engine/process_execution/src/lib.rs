@@ -27,13 +27,9 @@
 // Arc<Mutex> can be more clear than needing to grok Orderings:
 #![cfg_attr(feature = "cargo-clippy", allow(mutex_atomic))]
 
-
 use bazel_protos;
 
-
-
 use fs;
-
 
 use grpcio;
 use hashing;
@@ -44,9 +40,6 @@ use protobuf;
 
 #[cfg(test)]
 extern crate tempfile;
-
-
-
 
 use boxfuture::BoxFuture;
 use bytes::Bytes;

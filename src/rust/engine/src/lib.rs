@@ -47,7 +47,6 @@ mod selectors;
 mod tasks;
 mod types;
 
-
 use bytes;
 
 use fs;
@@ -55,20 +54,12 @@ use futures;
 
 use hashing;
 
-
-
 use log;
-
 
 use process_execution;
 use reqwest;
 
-
 use tar_api;
-
-
-
-
 
 use std::ffi::CStr;
 use std::fs::File;

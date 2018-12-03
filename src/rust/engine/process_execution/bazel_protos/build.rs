@@ -1,4 +1,3 @@
-
 use protoc_grpcio;
 
 use std::fs::File;

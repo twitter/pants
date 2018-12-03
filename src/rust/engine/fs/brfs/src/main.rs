@@ -35,12 +35,7 @@ use errno;
 use fs;
 use fuse;
 
-
 use libc;
-
-
-
-
 
 use time;
 
@@ -392,7 +387,13 @@ impl BuildResultFS {
 //  ... created on demand and cached for the lifetime of the program.
 impl fuse::Filesystem for BuildResultFS {
   // Used to answer stat calls
-  fn lookup(&mut self, _req: &fuse::Request<'_>, parent: Inode, name: &OsStr, reply: fuse::ReplyEntry) {
+  fn lookup(
+    &mut self,
+    _req: &fuse::Request<'_>,
+    parent: Inode,
+    name: &OsStr,
+    reply: fuse::ReplyEntry,
+  ) {
     let r = match (parent, name.to_str()) {
       (ROOT, Some("digest")) => Ok(dir_attr_for(DIGEST_ROOT)),
       (ROOT, Some("directory")) => Ok(dir_attr_for(DIRECTORY_ROOT)),

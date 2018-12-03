@@ -1,6 +1,3 @@
-
-
-
 use hashing;
 use protobuf;
 

@@ -29,7 +29,6 @@
 
 use rand;
 
-
 use std::thread;
 use std::time::Duration;
 

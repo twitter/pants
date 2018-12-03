@@ -415,9 +415,9 @@ impl StoreFileByDigest<String> for OneOffStoreFileByDigest {
 
 #[cfg(test)]
 mod tests {
-  use tempfile;
   use futures::future::Future;
   use hashing::{Digest, Fingerprint};
+  use tempfile;
   use testutil::data::TestDirectory;
   use testutil::make_file;
 

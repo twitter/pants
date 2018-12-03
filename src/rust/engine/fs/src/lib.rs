@@ -43,31 +43,20 @@ pub use crate::pool::ResettablePool;
 
 use bazel_protos;
 
-
-
-
 use dirs;
 use futures;
 use futures_cpupool;
 
 use grpcio;
 
-use ::ignore;
+use ignore;
 use indexmap;
-
 
 use lmdb;
 
-
-
 use protobuf;
 
-
-
-
-
 use uuid;
-
 
 use std::cmp::min;
 use std::io::{self, Read};

@@ -27,9 +27,7 @@
 // Arc<Mutex> can be more clear than needing to grok Orderings:
 #![cfg_attr(feature = "cargo-clippy", allow(mutex_atomic))]
 
-
 use termion;
-
 
 use std::collections::{BTreeMap, VecDeque};
 use std::io::Write;

@@ -1,8 +1,3 @@
-
-
-
-
-
 use flate2::read::GzDecoder;
 use std::fs::File;
 use std::path::Path;

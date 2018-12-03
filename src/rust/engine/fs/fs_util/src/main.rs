@@ -27,16 +27,10 @@
 // Arc<Mutex> can be more clear than needing to grok Orderings:
 #![cfg_attr(feature = "cargo-clippy", allow(mutex_atomic))]
 
-
-
 use clap;
 use env_logger;
 use fs;
 use futures;
-
-
-
-
 
 use serde_json;
 

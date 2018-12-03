@@ -1,6 +1,4 @@
-
 use env_logger;
-
 
 use clap::{App, Arg};
 use mock::StubCAS;
