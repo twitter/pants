@@ -11,13 +11,13 @@ use futures::future::{self, Future};
 
 use crate::context::{Context, Core};
 use crate::core::{Failure, Key, Params, TypeConstraint, TypeId, Value};
+use crate::nodes::{NodeKey, Select, Tracer, TryInto, Visualizer};
+use crate::rule_graph;
+use crate::selectors;
 use graph::{EntryId, Graph, InvalidationResult, Node, NodeContext};
 use indexmap::IndexMap;
 use log::{debug, info, warn};
-use crate::nodes::{NodeKey, Select, Tracer, TryInto, Visualizer};
 use parking_lot::Mutex;
-use crate::rule_graph;
-use crate::selectors;
 use ui::EngineDisplay;
 
 ///

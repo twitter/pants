@@ -88,14 +88,14 @@ use crate::externs::{
   SatisfiedByTypeExtern, StoreBytesExtern, StoreI64Extern, StoreTupleExtern, StoreUtf8Extern,
   TypeIdBuffer, TypeToStrExtern, ValToStrExtern,
 };
-use futures::Future;
 use crate::handles::Handle;
-use hashing::Digest;
-use log::error;
 use crate::rule_graph::{GraphMaker, RuleGraph};
 use crate::scheduler::{ExecutionRequest, RootResult, Scheduler, Session};
 use crate::tasks::Tasks;
 use crate::types::Types;
+use futures::Future;
+use hashing::Digest;
+use log::error;
 
 // TODO: Consider renaming and making generic for collections of PyResults.
 #[repr(C)]

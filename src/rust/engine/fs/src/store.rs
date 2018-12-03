@@ -16,8 +16,8 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
 
-use parking_lot::Mutex;
 use crate::pool::ResettablePool;
+use parking_lot::Mutex;
 
 // This is the maximum size any particular local LMDB store file is allowed to grow to.
 // It doesn't reflect space allocated on disk, or RAM allocated (it may be reflected in VIRT but
@@ -2252,13 +2252,13 @@ mod remote {
 mod tests {
   use super::{local, EntryType, FileContent, Store, UploadSummary};
 
+  use crate::pool::ResettablePool;
   use bazel_protos;
   use bytes::Bytes;
   use digest::{Digest as DigestTrait, FixedOutput};
   use futures::Future;
   use hashing::{Digest, Fingerprint};
   use mock::StubCAS;
-  use crate::pool::ResettablePool;
   use protobuf::Message;
   use sha2::Sha256;
   use std;

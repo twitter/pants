@@ -59,8 +59,8 @@ use petgraph::graph::DiGraph;
 use petgraph::visit::EdgeRef;
 use petgraph::Direction;
 
-use boxfuture::{BoxFuture, Boxable};
 pub use crate::node::{EntryId, Node, NodeContext, NodeError, NodeTracer, NodeVisualizer};
+use boxfuture::{BoxFuture, Boxable};
 
 type FNV = BuildHasherDefault<FnvHasher>;
 

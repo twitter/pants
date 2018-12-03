@@ -977,13 +977,13 @@ mod test {
 mod syscall_tests {
   use super::mount;
   use super::test::digest_to_filepath;
+  use crate::test::make_dirs;
   use fs;
   use futures::Future;
   use libc;
   use std::ffi::CString;
   use std::path::Path;
   use std::sync::Arc;
-  use crate::test::make_dirs;
   use testutil::data::TestData;
 
   #[test]

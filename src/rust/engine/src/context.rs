@@ -11,19 +11,19 @@ use tokio::runtime::Runtime;
 
 use futures::Future;
 
-use boxfuture::{BoxFuture, Boxable};
 use crate::core::{Failure, TypeId};
-use fs::{safe_create_dir_all_ioerror, PosixFS, ResettablePool, Store};
-use graph::{EntryId, Graph, NodeContext};
 use crate::handles::maybe_drop_handles;
-use log::debug;
 use crate::nodes::{NodeKey, TryInto, WrappedNode};
-use process_execution::{self, BoundedCommandRunner, CommandRunner};
-use reqwest;
-use resettable::Resettable;
 use crate::rule_graph::RuleGraph;
 use crate::tasks::Tasks;
 use crate::types::Types;
+use boxfuture::{BoxFuture, Boxable};
+use fs::{safe_create_dir_all_ioerror, PosixFS, ResettablePool, Store};
+use graph::{EntryId, Graph, NodeContext};
+use log::debug;
+use process_execution::{self, BoundedCommandRunner, CommandRunner};
+use reqwest;
+use resettable::Resettable;
 
 ///
 /// The core context shared (via Arc) between the Scheduler and the Context objects of
