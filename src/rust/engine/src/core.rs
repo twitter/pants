@@ -76,7 +76,7 @@ impl Params {
 }
 
 impl fmt::Display for Params {
-  fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
     write!(
       f,
       "{}",
@@ -94,7 +94,7 @@ pub type Id = u64;
 pub struct TypeId(pub Id);
 
 impl fmt::Display for TypeId {
-  fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
     if *self == ANY_TYPE {
       write!(f, "Any")
     } else {
@@ -141,7 +141,7 @@ impl hash::Hash for Key {
 }
 
 impl fmt::Display for Key {
-  fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
     write!(f, "{}", externs::key_to_str(self))
   }
 }
@@ -181,7 +181,7 @@ impl Deref for Value {
 }
 
 impl fmt::Debug for Value {
-  fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
     write!(f, "{}", externs::val_to_str(&self))
   }
 }

@@ -27,18 +27,18 @@
 // Arc<Mutex> can be more clear than needing to grok Orderings:
 #![cfg_attr(feature = "cargo-clippy", allow(mutex_atomic))]
 
-extern crate boxfuture;
-extern crate bytes;
-extern crate clap;
-extern crate env_logger;
-extern crate fs;
-extern crate futures;
-extern crate hashing;
-extern crate parking_lot;
-extern crate protobuf;
-extern crate serde;
-extern crate serde_derive;
-extern crate serde_json;
+
+
+use clap;
+use env_logger;
+use fs;
+use futures;
+
+
+
+
+
+use serde_json;
 
 use boxfuture::{try_future, BoxFuture, Boxable};
 use bytes::Bytes;
@@ -238,7 +238,7 @@ to this directory.",
   };
 }
 
-fn execute(top_match: &clap::ArgMatches) -> Result<(), ExitError> {
+fn execute(top_match: &clap::ArgMatches<'_>) -> Result<(), ExitError> {
   let store_dir = top_match
     .value_of("local-store-path")
     .map(PathBuf::from)

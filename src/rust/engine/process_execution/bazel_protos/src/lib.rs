@@ -1,8 +1,8 @@
-extern crate bytes;
-extern crate futures;
-extern crate grpcio;
-extern crate hashing;
-extern crate protobuf;
+
+
+
+use hashing;
+use protobuf;
 
 mod gen;
 pub use crate::gen::*;

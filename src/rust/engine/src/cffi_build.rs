@@ -1,5 +1,5 @@
-extern crate build_utils;
-extern crate cc;
+
+use cc;
 
 /*
 
