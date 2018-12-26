@@ -566,6 +566,7 @@ class JarPublish(TransitiveOptionRegistrar, HasTransitiveOptionMixin, ScmPublish
     self.check_clean_master(commit=(not self.dryrun and self.commit))
 
     exported_targets = self.exported_targets()
+    self.context.log.info('exported_targets: {}'.format(exported_targets))
     self.check_targets(exported_targets)
 
     pushdbs = {}
@@ -811,8 +812,13 @@ class JarPublish(TransitiveOptionRegistrar, HasTransitiveOptionMixin, ScmPublish
     derived_by_target = defaultdict(set)
 
     def collect_invalid(publish_target, walked_target):
+      self.context.log.info('publish_target: {}'.format(publish_target))
+      self.context.log.info('walked_target: {}'.format(walked_target))
+      self.context.log.info('walked_target.derived_from_chain: {}'.format(walked_target.derived_from_chain))
       for derived_target in walked_target.derived_from_chain:
         derived_by_target[derived_target].add(walked_target)
+        self.context.log.info('walked_target.has_sources(): {}'.format(walked_target.has_sources()))
+        self.context.log.info('walked_target.sources_relative_to_buildroot()'.format(walked_target.sources_relative_to_buildroot()))
       if not walked_target.has_sources() or not walked_target.sources_relative_to_buildroot():
         invalid[publish_target][walked_target].add('No sources.')
       if not self._is_exported(walked_target):
