@@ -187,10 +187,9 @@ def enum(*args):
   # TODO: docstring!
   if len(args) == 1:
     field_name = 'value'
-    all_values = args[0]
+    all_values, = args
   elif len(args) == 2:
-    field_name = args[0]
-    all_values = args[1]
+    field_name, all_values = args
   else:
     # TODO: better error message!
     raise ValueError("enum() accepts only 1 or 2 args")
@@ -223,15 +222,27 @@ def enum(*args):
           .format(value, field_name, cls.allowed_values))
 
     @classmethod
-    def create(cls, value=None):
+    def create(cls, *args, **kwargs):
+      """???"""
+      none_is_default = kwargs.pop('none_is_default', False)
+      if kwargs:
+        raise ValueError('unrecognized keyword arguments for {}.create(): {!r}'
+                         .format(cls.__name__, kwargs))
+
+      if len(args) == 0:
+        value = cls.default_value
+      elif len(args) == 1:
+        value = args[0]
+        if none_is_default and value is None:
+          value = cls.default_value
+      else:
+        raise ValueError('{}.create() accepts 0 or 1 positional args! *args = {!r}'
+                         .format(cls.__name__, args))
+
       # If we get an instance of this enum class, just return it. This means you can call .create()
-      # on None, an allowed value for the enum, or an existing instance of the enum.
+      # on an allowed value for the enum, or an existing instance of the enum.
       if isinstance(value, cls):
         return value
-
-      # Providing an explicit value that is not None will *not* use the default value!
-      if value is None:
-        value = cls.default_value
 
       # We actually circumvent the constructor in this method due to the cls._singletons
       # memoized_classproperty, but we want to raise the same error, so we move checking into a
@@ -240,10 +251,13 @@ def enum(*args):
 
       return cls._singletons[value]
 
+    @classmethod
+    def _get_value(cls, obj):
+      return getattr(obj, field_name)
+
     def __new__(cls, *args, **kwargs):
       this_object = super(ChoiceDatatype, cls).__new__(cls, *args, **kwargs)
-      obj_val = getattr(this_object, field_name)
-      cls._check_value(obj_val)
+      cls._check_value(cls._get_value(this_object))
       return this_object
 
     def resolve_for_enum_variant(self, mapping):
@@ -256,10 +270,15 @@ def enum(*args):
         raise EnumVariantSelectionError(
           "mapping for {} must have exactly the keys {} (was: {})"
           .format(type(self).__name__, self.allowed_values, keys))
-      fun_for_variant = mapping[self.value]
+      fun_for_variant = mapping[self._get_value(self)]
       return fun_for_variant()
 
   return ChoiceDatatype
+
+
+# TODO: allow declaring option type automatically as well?
+def register_enum_option(register, enum_cls, *args, **kwargs):
+  register(*args, choices=enum_cls.allowed_values, default=enum_cls.default_value, **kwargs)
 
 
 class TypedDatatypeClassConstructionError(Exception):

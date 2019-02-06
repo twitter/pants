@@ -88,7 +88,7 @@ class LLVM(NativeTool):
   def linker(self, platform):
     return Linker(
       path_entries=self.path_entries,
-      exe_filename=platform.resolve_platform_specific(
+      exe_filename=platform.resolve_for_enum_variant(
         self._PLATFORM_SPECIFIC_LINKER_NAME),
       library_dirs=[],
       linking_library_dirs=[],
