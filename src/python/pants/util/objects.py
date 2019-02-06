@@ -224,8 +224,7 @@ def enum(*args):
   elif len(args) == 2:
     field_name, all_values = args
   else:
-    # TODO: better error message!
-    raise ValueError("enum() accepts only 1 or 2 args")
+    raise ValueError("enum() accepts only 1 or 2 args! args = {!r}".format(args))
 
   # This call to list() will eagerly evaluate any `all_values` which would otherwise be lazy, such
   # as a generator.
@@ -242,7 +241,8 @@ def enum(*args):
     allowed_values = allowed_values_set
     default_value = next(iter(allowed_values))
 
-    # Overriden from datatype().
+    # Overriden from datatype() so providing an invalid variant is catchable as a TypeCheckError,
+    # but more specific.
     type_check_error_type = EnumVariantSelectionError
 
     @memoized_classproperty
