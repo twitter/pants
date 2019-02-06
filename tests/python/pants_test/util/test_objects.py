@@ -12,7 +12,8 @@ from builtins import object, str
 
 from future.utils import PY2, PY3, text_type
 
-from pants.util.objects import (Collection, Exactly, SubclassesOf, SuperclassesOf, TypeCheckError,
+from pants.util.objects import (Collection, EnumVariantSelectionError, Exactly, SubclassesOf,
+                                SuperclassesOf, TypeCheckError,
                                 TypedDatatypeInstanceConstructionError, datatype, enum)
 from pants_test.test_base import TestBase
 
@@ -615,15 +616,22 @@ field 'elements' was invalid: value 3 (with type 'int') must satisfy this type c
   def test_enum_instance_creation_errors(self):
     expected_rx = re.escape(
       "Value 3 for 'x' must be one of: OrderedSet([1, 2]).")
-    with self.assertRaisesRegexp(TypeCheckError, expected_rx):
+    with self.assertRaisesRegexp(EnumVariantSelectionError, expected_rx):
       SomeEnum.create(3)
-    with self.assertRaisesRegexp(TypeCheckError, expected_rx):
+    with self.assertRaisesRegexp(EnumVariantSelectionError, expected_rx):
       SomeEnum(3)
-    with self.assertRaisesRegexp(TypeCheckError, expected_rx):
+    with self.assertRaisesRegexp(EnumVariantSelectionError, expected_rx):
       SomeEnum(x=3)
+
+    # Test that None is not used as the default unless none_is_default=True.
+    with self.assertRaisesRegexp(EnumVariantSelectionError, re.escape(
+        "Value None for 'x' must be one of: OrderedSet([1, 2])."
+    )):
+      SomeEnum.create(None)
+    self.assertEqual(1, SomeEnum.create(None, none_is_default=True).x)
 
     expected_rx_falsy_value = re.escape(
       "Value {}'' for 'x' must be one of: OrderedSet([1, 2])."
       .format('u' if PY2 else ''))
-    with self.assertRaisesRegexp(TypeCheckError, expected_rx_falsy_value):
+    with self.assertRaisesRegexp(EnumVariantSelectionError, expected_rx_falsy_value):
       SomeEnum(x='')

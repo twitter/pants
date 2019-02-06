@@ -245,6 +245,11 @@ def enum(*args):
     # but more specific.
     type_check_error_type = EnumVariantSelectionError
 
+    @classmethod
+    def _get_value(cls, obj):
+      """Helper method to avoid using `field_name` in the class implementation a lot."""
+      return getattr(obj, field_name)
+
     @memoized_classproperty
     def _singletons(cls):
       """Generate memoized instances of this enum wrapping each of this enum's allowed values."""
@@ -294,10 +299,6 @@ def enum(*args):
       cls._check_value(value)
 
       return cls._singletons[value]
-
-    @classmethod
-    def _get_value(cls, obj):
-      return getattr(obj, field_name)
 
     def __new__(cls, *args, **kwargs):
       this_object = super(ChoiceDatatype, cls).__new__(cls, *args, **kwargs)
