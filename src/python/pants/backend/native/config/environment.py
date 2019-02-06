@@ -67,8 +67,8 @@ class Executable(AbstractClass):
     :rtype: dict of string -> string
     """
     lib_env_var = self._platform.resolve_for_enum_variant({
-      'darwin': lambda: 'DYLD_LIBRARY_PATH',
-      'linux': lambda: 'LD_LIBRARY_PATH',
+      'darwin': 'DYLD_LIBRARY_PATH',
+      'linux': 'LD_LIBRARY_PATH',
     })
     return {
       'PATH': create_path_env_var(self.path_entries),

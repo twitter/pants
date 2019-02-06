@@ -106,8 +106,8 @@ class UnpackWheels(UnpackRemoteSourcesBase):
   @memoized_classproperty
   def _current_platform_abbreviation(cls):
     return NativeBackendPlatform.create().resolve_for_enum_variant({
-      'darwin': lambda: 'macosx',
-      'linux': lambda: 'linux',
+      'darwin': 'macosx',
+      'linux': 'linux',
     })
 
   @classmethod

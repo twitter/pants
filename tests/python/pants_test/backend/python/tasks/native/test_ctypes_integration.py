@@ -93,8 +93,8 @@ class CTypesIntegrationTest(PantsRunIntegrationTest):
       dist_name, dist_version, wheel_platform = name_and_platform(wheel_dist)
       self.assertEqual(dist_name, 'ctypes_test')
       contains_current_platform = Platform.create().resolve_for_enum_variant({
-        'darwin': lambda: wheel_platform.startswith('macosx'),
-        'linux': lambda: wheel_platform.startswith('linux'),
+        'darwin': wheel_platform.startswith('macosx'),
+        'linux': wheel_platform.startswith('linux'),
       })
       self.assertTrue(contains_current_platform)
 
@@ -154,8 +154,8 @@ class CTypesIntegrationTest(PantsRunIntegrationTest):
     # TODO(#6848): we need to provide the libstdc++.so.6.dylib which comes with gcc on osx in the
     # DYLD_LIBRARY_PATH during the 'run' goal somehow.
     attempt_pants_run = Platform.create().resolve_for_enum_variant({
-      'darwin': lambda: toolchain_variant != 'gnu',
-      'linux': lambda: True,
+      'darwin': toolchain_variant != 'gnu',
+      'linux': True,
     })
     if attempt_pants_run:
       pants_run_interop = self.run_pants(['-q', 'run', self._binary_target_with_interop], config={
@@ -184,8 +184,8 @@ class CTypesIntegrationTest(PantsRunIntegrationTest):
     # TODO(#6848): this fails when run with gcc on osx as it requires gcc's libstdc++.so.6.dylib to
     # be available on the runtime library path.
     attempt_pants_run = Platform.create().resolve_for_enum_variant({
-      'darwin': lambda: toolchain_variant != 'gnu',
-      'linux': lambda: True,
+      'darwin': toolchain_variant != 'gnu',
+      'linux': True,
     })
     if attempt_pants_run:
       pants_run = self.run_pants(['-q', 'run', self._binary_target_with_third_party], config={

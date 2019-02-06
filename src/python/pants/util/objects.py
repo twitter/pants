@@ -306,18 +306,21 @@ def enum(*args):
       return this_object
 
     def resolve_for_enum_variant(self, mapping):
-      """Invoke the method in `mapping` with the key corresponding to the enum value.
+      """Return the object in `mapping` with the key corresponding to the enum value.
 
-      `mapping` is a dict mapping enum variant -> zero-argument lambda. All variants must be
+      `mapping` is a dict mapping enum variant value -> arbitrary object. All variant values must be
       provided.
+
+      NB: The objects in `mapping` should be made into lambdas if lazy execution is desired, as this
+      will "evaluate" all of the values in `mapping`.
       """
       keys = OrderedSet(mapping.keys())
       if keys != self.allowed_values:
         raise EnumVariantSelectionError(
           "pattern matching for enum {} must have exactly the keys {} (was: {})"
           .format(type(self).__name__, self.allowed_values, keys))
-      fun_for_variant = mapping[self._get_value(self)]
-      return fun_for_variant()
+      match_for_variant = mapping[self._get_value(self)]
+      return match_for_variant
 
   return ChoiceDatatype
 
