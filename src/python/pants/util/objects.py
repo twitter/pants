@@ -324,7 +324,8 @@ def enum(*args):
 # TODO: allow declaring option type automatically as well?
 def register_enum_option(register, enum_cls, *args, **kwargs):
   """A helper method for declaring a pants option from an `enum()`."""
-  register(*args, choices=enum_cls.allowed_values, default=enum_cls.default_value, **kwargs)
+  default_value = kwargs.pop('default', enum_cls.default_value)
+  register(*args, choices=enum_cls.allowed_values, default=default_value, **kwargs)
 
 
 class TypeConstraintError(TypeError):

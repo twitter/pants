@@ -19,7 +19,7 @@ from pants.subsystem.subsystem_client_mixin import SubsystemClientMixin
 from pants.util.objects import datatype, enum, register_enum_option
 
 
-class GlobMatchErrorBehavior(enum('failure_behavior', ['warn', 'ignore', 'error'])):
+class GlobMatchErrorBehavior(enum('failure_behavior', ['ignore', 'warn', 'error'])):
   """Describe the action to perform when matching globs in BUILD files to source files.
 
   NB: this object is interpreted from within Snapshot::lift_path_globs() -- that method will need to
@@ -196,7 +196,8 @@ class GlobalOptionsRegistrar(SubsystemClientMixin, Optionable):
                   '(e.g. BUILD file scanning, glob matching, etc). '
                   'Patterns use the gitignore syntax (https://git-scm.com/docs/gitignore).')
     register_enum_option(
-      register, GlobMatchErrorBehavior, '--glob-expansion-failure', type=str, advanced=True,
+      register, GlobMatchErrorBehavior, '--glob-expansion-failure', default='warn', type=str,
+      advanced=True,
       help="Raise an exception if any targets declaring source files "
            "fail to match any glob provided in the 'sources' argument.")
 
