@@ -7,12 +7,11 @@ from __future__ import absolute_import, division, print_function, unicode_litera
 import sys
 from abc import abstractmethod
 from builtins import object, zip
-from collections import namedtuple
+from collections import OrderedDict, namedtuple
 
 from future.utils import PY2
 from twitter.common.collections import OrderedSet
 
-from pants.util.collections_abc_backport import OrderedDict
 from pants.util.memo import memoized, memoized_classproperty
 from pants.util.meta import AbstractClass
 
@@ -170,7 +169,11 @@ def datatype(field_decls, superclass_name=None, **kwargs):
     return type(superclass_name.encode('utf-8'), (DataType,), {})
 
 
-def enum(field_name, all_values):
+class EnumVariantSelectionError(TypeError):
+  """???"""
+
+
+def enum(*args):
   """A datatype which can take on a finite set of values. This method is experimental and unstable.
 
   Any enum subclass can be constructed with its create() classmethod. This method will use the first
@@ -181,6 +184,16 @@ def enum(field_name, all_values):
   :param all_values: An iterable of objects representing all possible values for the enum.
                      NB: `all_values` must be a finite, non-empty iterable with unique values!
   """
+  # TODO: docstring!
+  if len(args) == 1:
+    field_name = 'value'
+    all_values = args[0]
+  elif len(args) == 2:
+    field_name = args[0]
+    all_values = args[1]
+  else:
+    # TODO: better error message!
+    raise ValueError("enum() accepts only 1 or 2 args")
 
   # This call to list() will eagerly evaluate any `all_values` which would otherwise be lazy, such
   # as a generator.
@@ -229,12 +242,22 @@ def enum(field_name, all_values):
 
     def __new__(cls, *args, **kwargs):
       this_object = super(ChoiceDatatype, cls).__new__(cls, *args, **kwargs)
-
-      field_value = getattr(this_object, field_name)
-
-      cls._check_value(field_value)
-
+      obj_val = getattr(this_object, field_name)
+      cls._check_value(obj_val)
       return this_object
+
+    def resolve_for_enum_variant(self, mapping):
+      """Invoke the method in `mapping` with the key corresponding to the enum value.
+
+      `mapping` is a dict mapping execution strategy -> zero-argument lambda.
+      """
+      keys = OrderedSet(mapping.keys())
+      if keys != self.allowed_values:
+        raise EnumVariantSelectionError(
+          "mapping for {} must have exactly the keys {} (was: {})"
+          .format(type(self).__name__, self.allowed_values, keys))
+      fun_for_variant = mapping[self.value]
+      return fun_for_variant()
 
   return ChoiceDatatype
 
