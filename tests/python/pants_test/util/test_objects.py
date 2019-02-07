@@ -12,6 +12,7 @@ from builtins import object, str
 
 from future.utils import PY2, PY3, text_type
 
+from pants.util.collections_abc_backport import OrderedDict
 from pants.util.objects import (Collection, EnumVariantSelectionError, Exactly, SubclassesOf,
                                 SuperclassesOf, TypeCheckError,
                                 TypedDatatypeInstanceConstructionError, datatype, enum)
@@ -661,3 +662,17 @@ type check error in class SomeEnum: pattern matching must have exactly the keys 
       one_enum_instance.resolve_for_enum_variant({
         1: 3,
       })
+
+    # Test that the ordering of the values in the enum constructor is not relevant for testing
+    # whether all variants are provided.
+    class OutOfOrderEnum(enum([2, 1, 3])): pass
+    two_out_of_order_instance = OutOfOrderEnum(2)
+    # This OrderedDict mapping is in a different order than in the enum constructor. This test means
+    # we can rely on providing simply a literal dict to resolve_for_enum_variant() and not worry
+    # that the dict ordering will cause an error.
+    letter = two_out_of_order_instance.resolve_for_enum_variant(OrderedDict([
+      (1, 'b'),
+      (2, 'a'),
+      (3, 'c'),
+    ]))
+    self.assertEqual(letter, 'a')

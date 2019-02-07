@@ -309,7 +309,10 @@ def enum(*args):
       NB: The objects in `mapping` should be made into lambdas if lazy execution is desired, as this
       will "evaluate" all of the values in `mapping`.
       """
-      keys = OrderedSet(mapping.keys())
+      # Equality between a frozenset() and an OrderedSet() is done without respect to ordering,
+      # which is what we want here. We only maintain an OrderedSet() in self.allowed_values so that
+      # we can present error messages with the same arguments used in the constructor.
+      keys = frozenset(mapping.keys())
       if keys != self.allowed_values:
         raise self.make_type_error(
           "pattern matching must have exactly the keys {} (was: {})"
