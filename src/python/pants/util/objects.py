@@ -16,31 +16,17 @@ from pants.util.memo import memoized, memoized_classproperty
 from pants.util.meta import AbstractClass, classproperty
 
 
-class TypedDatatypeClassConstructionError(Exception):
+class TypeCheckError(TypeError):
 
   # TODO: make some wrapper exception class to make this kind of
   # prefixing easy (maybe using a class field format string?).
   def __init__(self, type_name, msg, *args, **kwargs):
-    full_msg =  "error: while trying to generate typed datatype {}: {}".format(
-      type_name, msg)
-    super(TypedDatatypeClassConstructionError, self).__init__(
-      full_msg, *args, **kwargs)
+    formatted_msg = "type check error in class {}: {}".format(type_name, msg)
+    super(TypeCheckError, self).__init__(formatted_msg, *args, **kwargs)
 
 
-class TypedDatatypeInstanceConstructionError(TypeError):
-
-  def __init__(self, type_name, msg, *args, **kwargs):
-    full_msg = "error: in constructor of type {}: {}".format(type_name, msg)
-    super(TypedDatatypeInstanceConstructionError, self).__init__(
-      full_msg, *args, **kwargs)
-
-
-class TypeCheckError(TypedDatatypeInstanceConstructionError):
-
-  def __init__(self, type_name, msg, *args, **kwargs):
-    formatted_msg = "type check error:\n{}".format(msg)
-    super(TypeCheckError, self).__init__(
-      type_name, formatted_msg, *args, **kwargs)
+class TypedDatatypeInstanceConstructionError(TypeCheckError):
+  """Raised when a datatype()'s fields fail a type check upon construction."""
 
 
 def datatype(field_decls, superclass_name=None, **kwargs):
@@ -87,10 +73,16 @@ def datatype(field_decls, superclass_name=None, **kwargs):
     @classproperty
     def type_check_error_type(cls):
       """The exception type to use in make_type_error()."""
-      return TypeCheckError
+      return TypedDatatypeInstanceConstructionError
 
     @classmethod
     def make_type_error(cls, msg, *args, **kwargs):
+      """A helper method to generate an exception type for type checking errors.
+
+      This method uses `cls.type_check_error_type` to ensure that type checking errors can be caught
+      with a reliable exception type. The type returned by `cls.type_check_error_type` should ensure
+      that the exception messages are prefixed with enough context to be useful and *not* confusing.
+      """
       return cls.type_check_error_type(cls.__name__, msg, *args, **kwargs)
 
     def __new__(cls, *args, **kwargs):
@@ -102,7 +94,8 @@ def datatype(field_decls, superclass_name=None, **kwargs):
       try:
         this_object = super(DataType, cls).__new__(cls, *args, **kwargs)
       except TypeError as e:
-        raise cls.make_type_error(e)
+        raise cls.make_type_error(
+          "error in namedtuple() base constructor: {}".format(e))
 
       # TODO: Make this kind of exception pattern (filter for errors then display them all at once)
       # more ergonomic.
@@ -115,7 +108,9 @@ def datatype(field_decls, superclass_name=None, **kwargs):
           type_failure_msgs.append(
             "field '{}' was invalid: {}".format(field_name, e))
       if type_failure_msgs:
-        raise cls.make_type_error('\n'.join(type_failure_msgs))
+        raise cls.make_type_error(
+          'errors type checking constructor arguments:\n{}'
+          .format('\n'.join(type_failure_msgs)))
 
       return this_object
 
@@ -316,9 +311,9 @@ def enum(*args):
       """
       keys = OrderedSet(mapping.keys())
       if keys != self.allowed_values:
-        raise EnumVariantSelectionError(
-          "pattern matching for enum {} must have exactly the keys {} (was: {})"
-          .format(type(self).__name__, self.allowed_values, keys))
+        raise self.make_type_error(
+          "pattern matching must have exactly the keys {} (was: {})"
+          .format(list(self.allowed_values), list(keys)))
       match_for_variant = mapping[self._get_value(self)]
       return match_for_variant
 
