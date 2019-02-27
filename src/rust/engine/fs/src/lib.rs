@@ -44,6 +44,7 @@ pub use crate::pool::ResettablePool;
 pub use serverset::BackoffConfig;
 
 use std::cmp::min;
+use std::collections::HashMap;
 use std::io::{self, Read};
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Component, Path, PathBuf};
@@ -761,6 +762,42 @@ impl PathStatGetter<io::Error> for Arc<PosixFS> {
         .collect::<Vec<_>>(),
     )
     .to_boxed()
+  }
+}
+
+struct StaticFS {
+  contents: HashMap<Dir, Arc<DirectoryListing>>,
+}
+
+impl StaticFS {
+  fn new(paths: Vec<PathBuf>) -> StaticFS {
+    for (first_component, group) in &paths
+      .iter()
+      .cloned()
+      .group_by(|s| s.path().components().next().unwrap().as_os_str().to_owned())
+    {
+      let mut path_group: Vec<PathStat> = group.collect();
+      unimplemented!("Need to group by component to build up a mqp of parent directories to children.");
+    }
+  }
+}
+
+impl VFS<String> for Arc<StaticFS> {
+  fn read_link(&self, link: &Link) -> BoxFuture<PathBuf, String> {
+    // The creation of a static filesystem does not allow for Links.
+    future::err(format!("{:?} does not exist within this filesystem.", link)).to_boxed()
+  }
+
+  fn scandir(&self, dir: Dir) -> BoxFuture<Arc<DirectoryListing>, String> {
+    future::result(self.contents.get(&dir).cloned().ok_or_else(|| format!("{:?} does not exist within this filesystem.", dir))).to_boxed()
+  }
+
+  fn is_ignored(&self, _stat: &Stat) -> bool {
+    false
+  }
+
+  fn mk_error(msg: &str) -> String {
+    msg.to_owned()
   }
 }
 
