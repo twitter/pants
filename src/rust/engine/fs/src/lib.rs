@@ -47,7 +47,7 @@ use std::cmp::min;
 use std::collections::HashMap;
 use std::io::{self, Read};
 use std::os::unix::fs::PermissionsExt;
-use std::path::{Component, Path, PathBuf};
+use std::path::{Component, Components, Path, PathBuf};
 use std::sync::Arc;
 use std::{fmt, fs};
 
@@ -56,7 +56,6 @@ use boxfuture::{BoxFuture, Boxable};
 use bytes::Bytes;
 use futures::future::{self, Future};
 use glob::Pattern;
-use itertools::Itertools;
 use lazy_static::lazy_static;
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
@@ -783,45 +782,42 @@ struct StaticFS {
 
 impl StaticFS {
   pub fn new(paths: Vec<PathBuf>) -> Result<StaticFS, String> {
-    let mut contents = HashMap::new();
-    Self::expand_dirs(&mut contents, &PathBuf::new(), &paths)?;
+    let mut unordered_contents = HashMap::new();
+    let empty_path = PathBuf::new();
+    for path in paths {
+      Self::add_path(&mut unordered_contents, &empty_path, path.components());
+    }
+    let contents = unordered_contents
+      .into_iter()
+      .map(|(dir, mut stats)| {
+        stats.sort_by(|a, b| a.path().cmp(b.path()));
+        (dir, Arc::new(DirectoryListing(stats)))
+      })
+      .collect();
     Ok(StaticFS { contents })
   }
 
-  ///
-  /// Recursively groups the given paths (assumed to represent files) by parent directory, and
-  /// builds DirectoryListings per directory.
-  ///
-  fn expand_dirs(
-    result: &mut HashMap<Dir, Arc<DirectoryListing>>,
+  fn add_path(
+    contents: &mut HashMap<Dir, Vec<Stat>>,
     path_so_far: &Path,
-    paths: &[PathBuf],
-  ) -> Result<(), String> {
-    println!(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>");
-    let mut listing = Vec::new();
-    for (_first_component, group) in &paths
-      .iter()
-      .cloned()
-      .group_by(|s| s.components().next().unwrap().as_os_str().to_owned())
-    {
-      // Partition items with this path component into files and directories, insert a
-      // DirectoryListing, and then recurse for directories.
-      let (dirs, files): (Vec<_>, Vec<_>) = group.partition(|p| p.components().count() > 1);
-      let dir_stats = dirs.iter().map(|p| Stat::dir(path_so_far.join(p)));
-      listing.extend(
-        dbg!(files)
-          .into_iter()
-          .map(|p| Stat::file(path_so_far.join(p), false)),
-      );
-      for dir in dirs {
-        Self::expand_dirs(&expand)
-      }
+    mut remainder: Components,
+  ) -> bool {
+    if let Some(component) = remainder.next() {
+      // The component represents a directory if it has child components: otherwise, a file.
+      let path = path_so_far.join(component);
+      let stat = if Self::add_path(contents, &path, remainder) {
+        Stat::dir(path)
+      } else {
+        Stat::file(path, false)
+      };
+      contents
+        .entry(Dir(path_so_far.to_owned()))
+        .or_insert_with(Vec::new)
+        .push(stat);
+      true
+    } else {
+      false
     }
-    result.insert(
-      dbg!(Dir(path_so_far.to_owned())),
-      dbg!(Arc::new(DirectoryListing(listing))),
-    );
-    Ok(())
   }
 }
 
@@ -1204,8 +1200,10 @@ mod posixfs_test {
 
   #[test]
   fn staticfs_expand_basic() {
-    let path = PathBuf::from("some/file");
-    let fs = Arc::new(StaticFS::new(vec![path.clone()]).unwrap());
+    // Create two files, with the effect that there is a nested directory for the longer path.
+    let p1 = PathBuf::from("some/file");
+    let p2 = PathBuf::from("some/other");
+    let fs = Arc::new(StaticFS::new(vec![p1.clone(), p2.join("file")]).unwrap());
     let globs = PathGlobs::create(
       &["some/*".into()],
       &[],
@@ -1216,13 +1214,16 @@ mod posixfs_test {
 
     assert_eq!(
       fs.expand(globs).wait().unwrap(),
-      vec![PathStat::file(
-        path.clone(),
-        File {
-          path,
-          is_executable: false,
-        },
-      ),],
+      vec![
+        PathStat::file(
+          p1.clone(),
+          File {
+            path: p1,
+            is_executable: false,
+          },
+        ),
+        PathStat::dir(p2.clone(), Dir(p2)),
+      ],
     );
   }
 
