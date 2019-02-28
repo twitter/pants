@@ -6,6 +6,10 @@ from __future__ import absolute_import, division, print_function, unicode_litera
 
 import re
 
+from pants.engine.fs import PathGlobs
+from pants.engine.native import Native
+from pants.option.global_options import GlobMatchErrorBehavior
+
 
 def glob_to_regex(pattern):
   """Given a glob pattern, return an equivalent regex expression.
@@ -65,9 +69,9 @@ def matches_filespec(path, spec):
 
 
 def any_matches_filespec(paths, spec):
-  if not paths or not spec:
-    return False
-  exclude_patterns = []
+  exclude = []
   for exclude_spec in spec.get('exclude', []):
-    exclude_patterns.extend(exclude_spec.get('globs', []))
-  return globs_matches(paths, spec.get('globs', []), exclude_patterns)
+    exclude.extend(exclude_spec.get('globs', []))
+  path_globs = PathGlobs(include=spec.get('globs', []), exclude=exclude)
+
+  return Native.instance.match_path_globs(path_globs, paths)

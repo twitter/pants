@@ -776,12 +776,16 @@ impl PathStatGetter<io::Error> for Arc<PosixFS> {
   }
 }
 
-struct StaticFS {
+///
+/// An in-memory implementation of VFS, useful for precisely reproducing glob matching behavior for
+/// a set of file paths.
+///
+pub struct MemFS {
   contents: HashMap<Dir, Arc<DirectoryListing>>,
 }
 
-impl StaticFS {
-  pub fn new(paths: Vec<PathBuf>) -> Result<StaticFS, String> {
+impl MemFS {
+  pub fn new(paths: Vec<PathBuf>) -> MemFS {
     let mut unordered_contents = HashMap::new();
     let empty_path = PathBuf::new();
     for path in paths {
@@ -794,7 +798,7 @@ impl StaticFS {
         (dir, Arc::new(DirectoryListing(stats)))
       })
       .collect();
-    Ok(StaticFS { contents })
+    MemFS { contents }
   }
 
   fn add_path(
@@ -821,7 +825,7 @@ impl StaticFS {
   }
 }
 
-impl VFS<String> for Arc<StaticFS> {
+impl VFS<String> for Arc<MemFS> {
   fn read_link(&self, link: &Link) -> BoxFuture<PathBuf, String> {
     // The creation of a static filesystem does not allow for Links.
     future::err(format!("{:?} does not exist within this filesystem.", link)).to_boxed()
@@ -912,8 +916,8 @@ mod posixfs_test {
   use testutil;
 
   use super::{
-    Dir, DirectoryListing, File, GlobExpansionConjunction, GlobMatching, Link, PathGlobs, PathStat,
-    PathStatGetter, PosixFS, ResettablePool, Stat, StaticFS, StrictGlobMatching,
+    Dir, DirectoryListing, File, GlobExpansionConjunction, GlobMatching, Link, MemFS, PathGlobs,
+    PathStat, PathStatGetter, PosixFS, ResettablePool, Stat, StrictGlobMatching,
   };
   use futures::Future;
   use std;
@@ -1199,11 +1203,11 @@ mod posixfs_test {
   }
 
   #[test]
-  fn staticfs_expand_basic() {
+  fn memfs_expand_basic() {
     // Create two files, with the effect that there is a nested directory for the longer path.
     let p1 = PathBuf::from("some/file");
     let p2 = PathBuf::from("some/other");
-    let fs = Arc::new(StaticFS::new(vec![p1.clone(), p2.join("file")]).unwrap());
+    let fs = Arc::new(MemFS::new(vec![p1.clone(), p2.join("file")]).unwrap());
     let globs = PathGlobs::create(
       &["some/*".into()],
       &[],
