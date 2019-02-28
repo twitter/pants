@@ -56,6 +56,7 @@ use boxfuture::{BoxFuture, Boxable};
 use bytes::Bytes;
 use futures::future::{self, Future};
 use glob::Pattern;
+use itertools::Itertools;
 use lazy_static::lazy_static;
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
@@ -72,6 +73,17 @@ impl Stat {
       &Stat::File(File { path: ref p, .. }) => p.as_path(),
       &Stat::Link(Link(ref p)) => p.as_path(),
     }
+  }
+
+  fn dir(path: PathBuf) -> Stat {
+    Stat::Dir(Dir(path))
+  }
+
+  fn file(path: PathBuf, is_executable: bool) -> Stat {
+    Stat::File(File {
+      path,
+      is_executable,
+    })
   }
 }
 
@@ -770,15 +782,46 @@ struct StaticFS {
 }
 
 impl StaticFS {
-  fn new(paths: Vec<PathBuf>) -> StaticFS {
-    for (first_component, group) in &paths
+  pub fn new(paths: Vec<PathBuf>) -> Result<StaticFS, String> {
+    let mut contents = HashMap::new();
+    Self::expand_dirs(&mut contents, &PathBuf::new(), &paths)?;
+    Ok(StaticFS { contents })
+  }
+
+  ///
+  /// Recursively groups the given paths (assumed to represent files) by parent directory, and
+  /// builds DirectoryListings per directory.
+  ///
+  fn expand_dirs(
+    result: &mut HashMap<Dir, Arc<DirectoryListing>>,
+    path_so_far: &Path,
+    paths: &[PathBuf],
+  ) -> Result<(), String> {
+    println!(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>");
+    let mut listing = Vec::new();
+    for (_first_component, group) in &paths
       .iter()
       .cloned()
-      .group_by(|s| s.path().components().next().unwrap().as_os_str().to_owned())
+      .group_by(|s| s.components().next().unwrap().as_os_str().to_owned())
     {
-      let mut path_group: Vec<PathStat> = group.collect();
-      unimplemented!("Need to group by component to build up a mqp of parent directories to children.");
+      // Partition items with this path component into files and directories, insert a
+      // DirectoryListing, and then recurse for directories.
+      let (dirs, files): (Vec<_>, Vec<_>) = group.partition(|p| p.components().count() > 1);
+      let dir_stats = dirs.iter().map(|p| Stat::dir(path_so_far.join(p)));
+      listing.extend(
+        dbg!(files)
+          .into_iter()
+          .map(|p| Stat::file(path_so_far.join(p), false)),
+      );
+      for dir in dirs {
+        Self::expand_dirs(&expand)
+      }
     }
+    result.insert(
+      dbg!(Dir(path_so_far.to_owned())),
+      dbg!(Arc::new(DirectoryListing(listing))),
+    );
+    Ok(())
   }
 }
 
@@ -789,7 +832,14 @@ impl VFS<String> for Arc<StaticFS> {
   }
 
   fn scandir(&self, dir: Dir) -> BoxFuture<Arc<DirectoryListing>, String> {
-    future::result(self.contents.get(&dir).cloned().ok_or_else(|| format!("{:?} does not exist within this filesystem.", dir))).to_boxed()
+    future::result(
+      self
+        .contents
+        .get(&dir)
+        .cloned()
+        .ok_or_else(|| format!("{:?} does not exist within this filesystem.", dir)),
+    )
+    .to_boxed()
   }
 
   fn is_ignored(&self, _stat: &Stat) -> bool {
@@ -866,7 +916,8 @@ mod posixfs_test {
   use testutil;
 
   use super::{
-    Dir, DirectoryListing, File, Link, PathStat, PathStatGetter, PosixFS, ResettablePool, Stat,
+    Dir, DirectoryListing, File, GlobExpansionConjunction, GlobMatching, Link, PathGlobs, PathStat,
+    PathStatGetter, PosixFS, ResettablePool, Stat, StaticFS, StrictGlobMatching,
   };
   use futures::Future;
   use std;
@@ -1149,6 +1200,30 @@ mod posixfs_test {
       None,
     ];
     assert_eq!(v, path_stats);
+  }
+
+  #[test]
+  fn staticfs_expand_basic() {
+    let path = PathBuf::from("some/file");
+    let fs = Arc::new(StaticFS::new(vec![path.clone()]).unwrap());
+    let globs = PathGlobs::create(
+      &["some/*".into()],
+      &[],
+      StrictGlobMatching::Ignore,
+      GlobExpansionConjunction::AnyMatch,
+    )
+    .unwrap();
+
+    assert_eq!(
+      fs.expand(globs).wait().unwrap(),
+      vec![PathStat::file(
+        path.clone(),
+        File {
+          path,
+          is_executable: false,
+        },
+      ),],
+    );
   }
 
   fn assert_only_file_is_executable(path: &Path, want_is_executable: bool) {
