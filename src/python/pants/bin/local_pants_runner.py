@@ -73,7 +73,7 @@ class LocalPantsRunner(object):
 
   @classmethod
   def create(cls, exiter, args, env, target_roots=None, daemon_graph_session=None,
-             options_bootstrapper=None):
+             options_bootstrapper=None, setup_logging=None):
     """Creates a new LocalPantsRunner instance by parsing options.
 
     :param Exiter exiter: The Exiter instance to use for this run.
@@ -88,8 +88,8 @@ class LocalPantsRunner(object):
     options, build_config, options_bootstrapper = cls.parse_options(
       args,
       env,
-      True,
-      options_bootstrapper
+      setup_logging=(setup_logging if setup_logging is not None else True),
+      options_bootstrapper=options_bootstrapper,
     )
     global_options = options.for_global_scope()
 
