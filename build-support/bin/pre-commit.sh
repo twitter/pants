@@ -63,7 +63,7 @@ if git rev-parse --verify "master" &>/dev/null; then
   # https://github.com/pantsbuild/pants/issues/6633
   # TODO: add a test case for this while including a pexrc file, as python checkstyle currently fails
   # quite often with a pexrc available.
-  echo "* Checking lint" && ./pants --exclude-target-regexp='testprojects/.*' --changed-parent=master lint || exit 1
+  echo "* Checking lint" && ./pants2 --exclude-target-regexp='testprojects/.*' --changed-parent=master lint || exit 1
 
   if git diff master --name-only | grep '\.rs$' > /dev/null; then
     echo "* Checking formatting of rust files" && ./build-support/bin/check_rust_formatting.sh || exit 1
@@ -77,7 +77,7 @@ if git rev-parse --verify "master" &>/dev/null; then
   if git diff master --name-only | grep build-support/travis > /dev/null; then
     echo "* Checking .travis.yml generation" && \
     actual_travis_yml=$(<.travis.yml) && \
-    expected_travis_yml=$(./pants --quiet run build-support/travis:generate_travis_yml) && \
+    expected_travis_yml=$(./pants2 --quiet run build-support/travis:generate_travis_yml) && \
     [ "${expected_travis_yml}" == "${actual_travis_yml}" ] || \
     die "Travis config generator changed but .travis.yml file not regenerated. See top of that file for instructions."
   fi

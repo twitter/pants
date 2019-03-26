@@ -12,8 +12,7 @@ import time
 from builtins import open, zip
 from contextlib import contextmanager
 
-from future.utils import PY3, raise_with_traceback
-from setproctitle import setproctitle as set_process_title
+from future.utils import raise_with_traceback
 
 from pants.base.build_environment import get_buildroot
 from pants.base.exception_sink import ExceptionSink, SignalHandler
