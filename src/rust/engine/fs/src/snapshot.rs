@@ -5,13 +5,15 @@ use crate::glob_matching::GlobMatching;
 use crate::pool::ResettablePool;
 use crate::{Dir, File, PathGlobs, PathStat, PosixFS, Store};
 use bazel_protos;
-use boxfuture::{try_future, BoxFuture, Boxable};
+use boxfuture::{BoxFuture, Boxable};
 use futures::future::{self, join_all};
 use futures::Future;
 use hashing::{Digest, Fingerprint};
 use indexmap::{self, IndexMap};
 use itertools::Itertools;
 use protobuf;
+use tokio::await;
+
 use std::ffi::OsString;
 use std::fmt;
 use std::iter::Iterator;
@@ -65,34 +67,30 @@ impl Snapshot {
       .to_boxed()
   }
 
-  pub fn from_digest(store: Store, digest: Digest) -> BoxFuture<Snapshot, String> {
-    store
-      .walk(digest, |_, path_so_far, _, directory| {
-        let mut path_stats = Vec::new();
-        path_stats.extend(directory.get_directories().iter().map(move |dir_node| {
-          let path = path_so_far.join(dir_node.get_name());
-          PathStat::dir(path.clone(), Dir(path))
-        }));
-        path_stats.extend(directory.get_files().iter().map(move |file_node| {
-          let path = path_so_far.join(file_node.get_name());
-          PathStat::file(
-            path.clone(),
-            File {
-              path,
-              is_executable: file_node.is_executable,
-            },
-          )
-        }));
-        future::ok(path_stats).to_boxed()
-      })
-      .map(move |path_stats_per_directory| {
-        let mut path_stats =
-          Iterator::flatten(path_stats_per_directory.into_iter().map(|v| v.into_iter()))
-            .collect::<Vec<_>>();
-        path_stats.sort_by(|l, r| l.path().cmp(&r.path()));
-        Snapshot { digest, path_stats }
-      })
-      .to_boxed()
+  pub async fn from_digest(store: Store, digest: Digest) -> Result<Snapshot, String> {
+    let path_stats_per_directory = await!(store.walk(digest, |_, path_so_far, _, directory| {
+      let mut path_stats = Vec::new();
+      path_stats.extend(directory.get_directories().iter().map(move |dir_node| {
+        let path = path_so_far.join(dir_node.get_name());
+        PathStat::dir(path.clone(), Dir(path))
+      }));
+      path_stats.extend(directory.get_files().iter().map(move |file_node| {
+        let path = path_so_far.join(file_node.get_name());
+        PathStat::file(
+          path.clone(),
+          File {
+            path,
+            is_executable: file_node.is_executable,
+          },
+        )
+      }));
+      future::ok(path_stats).to_boxed()
+    }))?;
+    let mut path_stats =
+      Iterator::flatten(path_stats_per_directory.into_iter().map(|v| v.into_iter()))
+        .collect::<Vec<_>>();
+    path_stats.sort_by(|l, r| l.path().cmp(&r.path()));
+    Ok(Snapshot { digest, path_stats })
   }
 
   pub fn digest_from_path_stats<
@@ -354,34 +352,32 @@ impl Snapshot {
   /// fall back to actually walking the filesystem if we don't have it (either due to garbage
   /// collection or Digest-oblivious legacy caching).
   ///
-  pub fn capture_snapshot_from_arbitrary_root<P: AsRef<Path> + Send + 'static>(
+  pub async fn capture_snapshot_from_arbitrary_root<P: AsRef<Path> + Send + 'static>(
     store: Store,
     fs_pool: Arc<ResettablePool>,
     root_path: P,
     path_globs: PathGlobs,
     digest_hint: Option<Digest>,
-  ) -> BoxFuture<Snapshot, String> {
+  ) -> Result<Snapshot, String> {
     // Attempt to use the digest hint to load a Snapshot without expanding the globs; otherwise,
     // expand the globs to capture a Snapshot.
     let store2 = store.clone();
-    future::result(digest_hint.ok_or_else(|| "No digest hint provided.".to_string()))
-      .and_then(move |digest| Snapshot::from_digest(store, digest))
-      .or_else(|_| {
-        let posix_fs = Arc::new(try_future!(PosixFS::new(root_path, fs_pool, &[])));
-
-        posix_fs
-          .expand(path_globs)
-          .map_err(|err| format!("Error expanding globs: {:?}", err))
-          .and_then(|path_stats| {
-            Snapshot::from_path_stats(
-              store2.clone(),
-              &OneOffStoreFileByDigest::new(store2, posix_fs),
-              path_stats,
-            )
-          })
-          .to_boxed()
-      })
-      .to_boxed()
+    if let Some(digest) = digest_hint {
+      if let Ok(snapshot) = await!(Snapshot::from_digest(store, digest)) {
+        return Ok(snapshot);
+      }
+    }
+    let posix_fs = Arc::new(PosixFS::new(root_path, fs_pool, &[])?);
+    await!(posix_fs
+      .expand(path_globs)
+      .map_err(|err| format!("Error expanding globs: {:?}", err))
+      .and_then(|path_stats| {
+        Snapshot::from_path_stats(
+          store2.clone(),
+          &OneOffStoreFileByDigest::new(store2, posix_fs),
+          path_stats,
+        )
+      }))
   }
 }
 
