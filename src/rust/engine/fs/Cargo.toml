@@ -31,6 +31,8 @@ sha2 = "0.8"
 serde = "1.0"
 serde_derive = "1.0"
 tempfile = "3"
+tokio = {version = "0.1.18", features = ["async-await-preview"]}
+tokio-async-await = "0.1.6"
 uuid = { version = "0.7.1", features = ["v4"] }
 
 [dev-dependencies]
