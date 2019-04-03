@@ -199,6 +199,8 @@ class SchedulerWithNestedRaiseTest(TestBase):
   def rules(cls):
     return super(SchedulerWithNestedRaiseTest, cls).rules() + [
       RootRule(B),
+      RootRule(TypeCheckFailWrapper),
+      a_typecheck_fail_test,
       nested_raise,
     ]
 
@@ -215,7 +217,7 @@ Exception: WithDeps(Inner(InnerEntry { params: {TypeCheckFailWrapper}, rule: Tas
     # Execute a request that will trigger the nested raise, and then directly inspect its trace.
     request = self.scheduler.execution_request([A], [B()])
     self.scheduler.execute(request)
-
+    
     trace = remove_locations_from_traceback('\n'.join(self.scheduler.trace(request)))
     assert_equal_with_printing(self, dedent('''
                      Computing Select(<pants_test.engine.test_scheduler.B object at 0xEEEEEEEEE>, A)
