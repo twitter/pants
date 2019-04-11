@@ -9,8 +9,10 @@ import os
 from contextlib import contextmanager
 
 from pants.base.exceptions import TaskError
+from pants.engine.console import LineOriented
 from pants.task.task import QuietTaskMixin, Task
 from pants.util.dirutil import safe_open
+from pants.util.memo import memoized_property
 
 
 class ConsoleTask(QuietTaskMixin, Task):
@@ -23,21 +25,37 @@ class ConsoleTask(QuietTaskMixin, Task):
   def register_options(cls, register):
     super(ConsoleTask, cls).register_options(register)
     register('--sep', default='\\n', metavar='<separator>',
+             removal_version='1.18.0.dev2',
+             removal_hint='Use `--lines-sep instead.`',
              help='String to use to separate results.')
     register('--output-file', metavar='<path>',
+             removal_version='1.18.0.dev2',
+             removal_hint='Use `--lines-output-file instead.`',
              help='Write the console output to this file instead.')
+
+  @classmethod
+  def subsystem_dependencies(cls):
+    return super(ConsoleTask, cls).subsystem_dependencies() + (LineOriented.scoped(cls),)
 
   def __init__(self, *args, **kwargs):
     super(ConsoleTask, self).__init__(*args, **kwargs)
-    self._console_separator = self.get_options().sep.encode('utf-8').decode('unicode_escape')
-    if self.get_options().output_file:
+    self._console_separator = self.lines_options.sep.encode('utf-8').decode('unicode_escape')
+    if self.lines_options.output_file:
       try:
-        self._outstream = safe_open(os.path.abspath(self.get_options().output_file), 'wb')
+        self._outstream = safe_open(os.path.abspath(self.lines_options.output_file), 'wb')
       except IOError as e:
         raise TaskError('Error opening stream {out_file} due to'
-                        ' {error_str}'.format(out_file=self.get_options().output_file, error_str=e))
+                        ' {error_str}'.format(out_file=self.lines_options.output_file, error_str=e))
     else:
       self._outstream = self.context.console_outstream
+
+  @memoized_property
+  def lines_options(self):
+    lines_options = LineOriented.scoped_instance(self).get_options()
+    if not lines_options.is_default('sep') or not lines_options.is_default('output_file'):
+      return lines_options
+    else:
+      return self.get_options()
 
   @contextmanager
   def _guard_sigpipe(self):
@@ -58,7 +76,7 @@ class ConsoleTask(QuietTaskMixin, Task):
           self._outstream.write(self._console_separator.encode('utf-8'))
       finally:
         self._outstream.flush()
-        if self.get_options().output_file:
+        if self.lines_options.output_file:
           self._outstream.close()
 
   def console_output(self, targets):

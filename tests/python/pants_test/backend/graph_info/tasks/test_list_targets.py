@@ -16,6 +16,7 @@ from pants.backend.jvm.targets.java_library import JavaLibrary
 from pants.backend.python.targets.python_library import PythonLibrary
 from pants.build_graph.build_file_aliases import BuildFileAliases
 from pants.build_graph.target import Target
+from pants.engine.console import LineOriented
 from pants_test.task_test_base import ConsoleTaskTestBase
 
 
@@ -129,6 +130,7 @@ class ListTargetsTest(BaseListTargetsTest):
         'f:alias',
         targets=self.targets('::'))
 
+    self.set_options_for_scope(LineOriented.options_scope, sep=', ')
     self.assert_entries(', ',
         'a:a',
         'a/b:b',
@@ -138,7 +140,6 @@ class ListTargetsTest(BaseListTargetsTest):
         'a/b/d:d',
         'a/b/e:e1',
         'f:alias',
-        options={'sep': ', '},
         targets=self.targets('::'))
 
     self.assert_console_output(

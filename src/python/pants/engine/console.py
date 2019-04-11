@@ -6,6 +6,20 @@ from __future__ import absolute_import, division, print_function, unicode_litera
 
 import sys
 
+from pants.subsystem.subsystem import Subsystem
+
+
+class LineOriented(Subsystem):
+  options_scope = 'lines'
+
+  @classmethod
+  def register_options(cls, register):
+    super(LineOriented, cls).register_options(register)
+    register('--sep', default='\\n', metavar='<separator>',
+             help='String to use to separate result lines.')
+    register('--output-file', metavar='<path>',
+             help='Write line-oriented output to this file instead.')
+
 
 class Console(object):
   @property

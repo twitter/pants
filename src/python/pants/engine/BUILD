@@ -204,7 +204,10 @@ python_library(
 
 python_library(
   name='console',
-  sources=['console.py']
+  sources=['console.py'],
+  dependencies=[
+    'src/python/pants/subsystem',
+  ]
 )
 
 resources(
