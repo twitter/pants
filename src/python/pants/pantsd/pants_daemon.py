@@ -67,7 +67,13 @@ class _LoggerStream(object):
       # if provided a bytes input for unicode text.
       line = ensure_text(line)
       # TODO(ity): Enable logging here
-      # self._logger.log(self._log_level, line.rstrip())
+      with open('out', 'a') as f:
+        f.write('*'*10)
+        f.write(str(self._handler))
+        f.write(str(self._log_level))
+        f.write(msg)
+        f.write('\n')
+      self._logger.log(self._log_level, line.rstrip())
 
   def flush(self):
     return
@@ -316,6 +322,8 @@ class PantsDaemon(FingerprintedProcessManager):
       sys.stdout = _LoggerStream(logging.getLogger(), logging.INFO, result.log_handler)
       sys.stderr = _LoggerStream(logging.getLogger(), logging.WARN, result.log_handler)
 
+      with open('pants_daemon_out', 'w') as f:
+        f.write('inside _pantsd_logging')
       self._logger.debug('logging initialized')
       yield (result.log_handler.stream, result.log_handler.native_filename)
 

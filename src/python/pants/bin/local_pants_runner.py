@@ -83,7 +83,17 @@ class LocalPantsRunner(object):
 
   @staticmethod
   def parse_options(args, env, setup_logging=False, options_bootstrapper=None):
+
+    with open('bootstrap_options', 'a') as f:
+      f.write("passed in:")
+      f.write(str(options_bootstrapper))
+      f.write('\n')
     options_bootstrapper = options_bootstrapper or OptionsBootstrapper.create(args=args, env=env)
+    with open('bootstrap_options', 'a') as f:
+      f.write("final:")
+      f.write(str(options_bootstrapper))
+      f.write('\n')
+
     bootstrap_options = options_bootstrapper.get_bootstrap_options().for_global_scope()
     if setup_logging:
       # Bootstrap logging and then fully initialize options.
@@ -230,9 +240,9 @@ class LocalPantsRunner(object):
     self._exiter = LocalExiter(self._run_tracker, self._repro, exiter=self._exiter)
     ExceptionSink.reset_exiter(self._exiter)
 
-  def run(self):
+  def run(self, exit_process_on_success=True):
     with maybe_profiled(self._profile_path):
-      self._run()
+      self._run(exit_process_on_success)
 
   def _maybe_run_v1(self):
     if not self._global_options.v1:
@@ -287,7 +297,7 @@ class LocalPantsRunner(object):
         max_code = code
     return max_code
 
-  def _run(self):
+  def _run(self, exit_process_on_success):
     try:
       engine_result = self._maybe_run_v2()
       goal_runner_result = self._maybe_run_v1()
@@ -304,4 +314,5 @@ class LocalPantsRunner(object):
       goal_runner_result,
       run_tracker_result
     )
-    self._exiter.exit(final_exit_code)
+    if exit_process_on_success:
+      self._exiter.exit(final_exit_code)

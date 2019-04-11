@@ -291,10 +291,10 @@ class DaemonPantsRunner(ProcessManager):
           self._options_bootstrapper,
           # TODO: If both the daemon and the child process `setup_logging`, we end up with
           # infinite recursion on the second child run.
-          setup_logging=False,
+          setup_logging=True,
         )
         runner.set_start_time(self._maybe_get_client_start_time_from_env(self._env))
-        runner.run()
+        runner.run(exit_process_on_success=False)
       except KeyboardInterrupt:
         self._exiter.exit_and_fail('Interrupted by user.\n')
       except GracefulTerminationException as e:
