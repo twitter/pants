@@ -6,13 +6,13 @@ from __future__ import absolute_import, division, print_function, unicode_litera
 
 from pex.orderedset import OrderedSet
 
-from pants.engine.console import Console
+from pants.engine.console import LineOrientedOutput
 from pants.engine.legacy.graph import TransitiveHydratedTargets
 from pants.engine.rules import console_rule
 
 
-@console_rule('filedeps', [Console, TransitiveHydratedTargets])
-def file_deps(console, transitive_hydrated_targets):
+@console_rule('filedeps', [LineOrientedOutput, TransitiveHydratedTargets])
+def file_deps(line_oriented_output, transitive_hydrated_targets):
   """List all source and BUILD files a target transitively depends on.
 
   Files are listed with relative paths and any BUILD files implied in the transitive closure of
@@ -25,10 +25,11 @@ def file_deps(console, transitive_hydrated_targets):
     if hydrated_target.address.rel_path:
       uniq_set.add(hydrated_target.address.rel_path)
     if hasattr(hydrated_target.adaptor, "sources"):
-      uniq_set.update(f.path for f in hydrated_target.adaptor.sources.snapshot.files)
+      uniq_set.update(f for f in hydrated_target.adaptor.sources.snapshot.files)
 
-  for f_path in uniq_set:
-    console.print_stdout(f_path)
+  with line_oriented_output.open() as (print_stdout, _):
+    for f_path in uniq_set:
+      print_stdout(f_path)
 
 
 def rules():

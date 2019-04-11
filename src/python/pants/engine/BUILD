@@ -206,7 +206,9 @@ python_library(
   name='console',
   sources=['console.py'],
   dependencies=[
+    ':rules',
     'src/python/pants/subsystem',
+    'src/python/pants/util:objects',
   ]
 )
 

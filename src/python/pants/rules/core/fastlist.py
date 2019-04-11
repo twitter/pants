@@ -6,7 +6,7 @@ from __future__ import absolute_import, division, print_function, unicode_litera
 
 from pants.base.specs import Specs
 from pants.engine.addressable import BuildFileAddresses
-from pants.engine.console import Console
+from pants.engine.console import LineOrientedOutput
 from pants.engine.legacy.graph import HydratedTargets
 from pants.engine.rules import console_rule, optionable_rule
 from pants.engine.selectors import Get
@@ -36,8 +36,9 @@ class ListOptions(Subsystem):
              help='Print only targets that are documented with a description.')
 
 
-@console_rule('list', [Console, ListOptions, Specs])
-def fast_list(console, options, specs):
+# TODO: This LineOrientedOutput output instance is global, but should become scoped in #6880.
+@console_rule('list', [LineOrientedOutput, ListOptions, Specs])
+def fast_list(line_oriented_output, options, specs):
   """A fast variant of `./pants list` with a reduced feature set."""
 
   provides = options.get_options().provides
@@ -78,13 +79,14 @@ def fast_list(console, options, specs):
     collection = yield Get(BuildFileAddresses, Specs, specs)
     print_fn = lambda address: address.spec
 
-  if not collection.dependencies:
-    console.print_stderr('WARNING: No targets were matched in goal `{}`.'.format('list'))
+  with line_oriented_output.open() as (print_stdout, print_stderr):
+    if not collection.dependencies:
+      print_stderr('WARNING: No targets were matched in goal `{}`.'.format('list'))
 
-  for item in collection:
-    result = print_fn(item)
-    if result:
-      console.print_stdout(result)
+    for item in collection:
+      result = print_fn(item)
+      if result:
+        print_stdout(result)
 
 
 def rules():

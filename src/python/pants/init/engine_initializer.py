@@ -5,6 +5,7 @@
 from __future__ import absolute_import, division, print_function, unicode_literals
 
 import logging
+import sys
 from builtins import object
 
 from pants.backend.docgen.targets.doc import Page
@@ -20,7 +21,8 @@ from pants.base.file_system_project_tree import FileSystemProjectTree
 from pants.build_graph.build_configuration import BuildConfiguration
 from pants.build_graph.remote_sources import RemoteSources
 from pants.engine.build_files import create_graph_rules
-from pants.engine.console import Console
+from pants.engine.console import _RawConsole
+from pants.engine.console import rules as console_rules
 from pants.engine.fs import create_fs_rules
 from pants.engine.isolated_process import create_process_rules
 from pants.engine.legacy.address_mapper import LegacyAddressMapper
@@ -35,7 +37,7 @@ from pants.engine.legacy.structs import (AppAdaptor, JvmBinaryAdaptor, PageAdapt
 from pants.engine.legacy.structs import rules as structs_rules
 from pants.engine.mapper import AddressMapper
 from pants.engine.parser import SymbolTable
-from pants.engine.rules import RootRule, rule
+from pants.engine.rules import rule
 from pants.engine.scheduler import Scheduler
 from pants.engine.selectors import Params
 from pants.init.options_initializer import BuildConfigInitializer
@@ -195,7 +197,7 @@ class LegacyGraphSession(datatype(['scheduler_session', 'build_file_aliases', 'g
     # Reduce to only applicable goals - with validation happening by way of `validate_goals()`.
     goals = [goal for goal in goals if goal in self.goal_map]
     subjects = self._determine_subjects(target_roots)
-    console = Console()
+    console = _RawConsole(sys.stdout, sys.stderr)
     # Console rule can only have one subject.
     assert len(subjects) == 1
     for goal in goals:
@@ -352,11 +354,11 @@ class EngineInitializer(object):
     # LegacyBuildGraph will explicitly request the products it needs.
     rules = (
       [
-        RootRule(Console),
         glob_match_error_behavior_singleton,
         build_configuration_singleton,
         symbol_table_singleton,
       ] +
+      console_rules() +
       create_legacy_graph_tasks() +
       create_fs_rules() +
       create_process_rules() +
