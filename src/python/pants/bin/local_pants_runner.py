@@ -135,7 +135,6 @@ class LocalPantsRunner(object):
     options, build_config, options_bootstrapper = cls.parse_options(
       args,
       env,
-      setup_logging=True,
       options_bootstrapper=options_bootstrapper,
     )
     global_options = options.for_global_scope()
@@ -178,7 +177,6 @@ class LocalPantsRunner(object):
       daemon_graph_session is not None,
       profile_path
     )
-
 
   def __init__(self, build_root, exiter, options, options_bootstrapper, build_config, target_roots,
                graph_session, is_daemon, profile_path):
@@ -287,7 +285,6 @@ class LocalPantsRunner(object):
     try:
       engine_result = self._maybe_run_v2()
       goal_runner_result = self._maybe_run_v1()
-      print('inside _run')
     finally:
       try:
         run_tracker_result = self._run_tracker.end()

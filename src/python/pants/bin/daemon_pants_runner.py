@@ -22,7 +22,6 @@ from pants.init.logging import setup_logging_from_options
 from pants.init.util import clean_global_runtime_state
 from pants.java.nailgun_io import NailgunStreamStdinReader, NailgunStreamWriter
 from pants.java.nailgun_protocol import ChunkType, NailgunProtocol
-from pants.option.options_bootstrapper import OptionsBootstrapper
 from pants.pantsd.process_manager import ProcessManager
 from pants.rules.core.exceptions import GracefulTerminationException
 from pants.util.contextutil import hermetic_environment_as, stdio_as
@@ -225,18 +224,18 @@ class DaemonPantsRunner(ProcessManager):
     stdin_isatty, stdout_isatty, stderr_isatty = NailgunProtocol.isatty_from_env(env)
     is_tty_capable = all((stdin_isatty, stdout_isatty, stderr_isatty))
 
-    # if is_tty_capable:
-    #   with cls._tty_stdio(env) as finalizer:
-    #     yield finalizer
-    # else:
-    with cls._pipe_stdio(
-      sock,
-      stdin_isatty,
-      stdout_isatty,
-      stderr_isatty,
-      handle_stdin
-    ) as finalizer:
-      yield finalizer
+    if is_tty_capable:
+      with cls._tty_stdio(env) as finalizer:
+        yield finalizer
+    else:
+      with cls._pipe_stdio(
+        sock,
+        stdin_isatty,
+        stdout_isatty,
+        stderr_isatty,
+        handle_stdin
+      ) as finalizer:
+        yield finalizer
 
   # TODO: there's no testing for this method, and this caused a user-visible failure -- see #7008!
   def _raise_deferred_exc(self):
@@ -270,12 +269,8 @@ class DaemonPantsRunner(ProcessManager):
     NailgunProtocol.send_pgrp(self._socket, os.getpgrp() * -1)
 
     # Invoke a Pants run with stdio redirected and a proxied environment.
-    with self.nailgunned_stdio(self._socket, self._env) as finalizer,\
-         hermetic_environment_as(**self._env):
+    with self.nailgunned_stdio(self._socket, self._env), hermetic_environment_as(**self._env):
       try:
-        # Setup the Exiter's finalizer.
-        self._exiter.set_finalizer(finalizer)
-
         # Clean global state.
         clean_global_runtime_state(reset_subsystem=True)
 
@@ -299,6 +294,7 @@ class DaemonPantsRunner(ProcessManager):
       except GracefulTerminationException as e:
         ExceptionSink.log_exception(
           'Encountered graceful termination exception {}; exiting'.format(e))
+        self._exiter.exit(e.exit_code)
       except Exception:
         # TODO: We override sys.excepthook above when we call ExceptionSink.set_exiter(). That
         # excepthook catches `SignalHandledNonLocalExit`s from signal handlers, which isn't
