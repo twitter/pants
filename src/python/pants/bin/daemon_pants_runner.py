@@ -13,15 +13,16 @@ from builtins import open, zip
 from contextlib import contextmanager
 
 from future.utils import raise_with_traceback
-from setproctitle import setproctitle as set_process_title
 
 from pants.base.build_environment import get_buildroot
 from pants.base.exception_sink import ExceptionSink, SignalHandler
 from pants.base.exiter import PANTS_SUCCEEDED_EXIT_CODE, Exiter
 from pants.bin.local_pants_runner import LocalPantsRunner
+from pants.init.logging import setup_logging_from_options
 from pants.init.util import clean_global_runtime_state
 from pants.java.nailgun_io import NailgunStreamStdinReader, NailgunStreamWriter
 from pants.java.nailgun_protocol import ChunkType, NailgunProtocol
+from pants.option.options_bootstrapper import OptionsBootstrapper
 from pants.pantsd.process_manager import ProcessManager
 from pants.rules.core.exceptions import GracefulTerminationException
 from pants.util.contextutil import hermetic_environment_as, stdio_as
@@ -224,18 +225,18 @@ class DaemonPantsRunner(ProcessManager):
     stdin_isatty, stdout_isatty, stderr_isatty = NailgunProtocol.isatty_from_env(env)
     is_tty_capable = all((stdin_isatty, stdout_isatty, stderr_isatty))
 
-    if is_tty_capable:
-      with cls._tty_stdio(env) as finalizer:
-        yield finalizer
-    else:
-      with cls._pipe_stdio(
-        sock,
-        stdin_isatty,
-        stdout_isatty,
-        stderr_isatty,
-        handle_stdin
-      ) as finalizer:
-        yield finalizer
+    # if is_tty_capable:
+    #   with cls._tty_stdio(env) as finalizer:
+    #     yield finalizer
+    # else:
+    with cls._pipe_stdio(
+      sock,
+      stdin_isatty,
+      stdout_isatty,
+      stderr_isatty,
+      handle_stdin
+    ) as finalizer:
+      yield finalizer
 
   # TODO: there's no testing for this method, and this caused a user-visible failure -- see #7008!
   def _raise_deferred_exc(self):
@@ -280,7 +281,8 @@ class DaemonPantsRunner(ProcessManager):
 
         # Re-raise any deferred exceptions, if present.
         self._raise_deferred_exc()
-
+        bootstrap_options = self._options_bootstrapper.get_bootstrap_options().for_global_scope()
+        setup_logging_from_options(bootstrap_options)
         # Otherwise, conduct a normal run.
         runner = LocalPantsRunner.create(
           self._exiter,
