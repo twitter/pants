@@ -76,6 +76,7 @@ default-members = [
 ]
 
 [dependencies]
+arc-swap = "0.3"
 boxfuture = { path = "boxfuture" }
 bytes = "0.4.5"
 fnv = "1.0.5"

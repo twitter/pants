@@ -8,10 +8,12 @@ use std::mem;
 use std::os::raw;
 use std::os::unix::ffi::{OsStrExt, OsStringExt};
 use std::string::FromUtf8Error;
+use std::sync::Arc;
 
 use crate::core::{Failure, Function, Key, TypeId, Value};
 use crate::handles::{DroppingHandle, Handle};
 use crate::interning::Interns;
+use arc_swap::{self, ArcSwapOption};
 use lazy_static::lazy_static;
 use parking_lot::RwLock;
 
@@ -246,10 +248,10 @@ pub fn generator_send(generator: &Value, arg: &Value) -> Result<GeneratorRespons
 /// Used to ensure that the main thread forks with all locks acquired.
 ///
 pub fn exclusive_call(func: &Key) -> Result<Value, Failure> {
-  // NB: Acquiring the interns exclusively as well.
+  // NB: Acquiring the interns exclusively.
   let interns = INTERNS.write();
   let func_val = interns.get(func);
-  with_externs_exclusive(|e| (e.call)(e.context, func_val as &Handle, &[].as_ptr(), 0)).into()
+  call(&func_val, &[])
 }
 
 ///
@@ -271,7 +273,7 @@ pub fn unsafe_call(func: &Function, args: &[Value]) -> Value {
 lazy_static! {
   // NB: Unfortunately, it's not currently possible to merge these locks, because mutating
   // the `Interns` requires calls to extern functions, which would be re-entrant.
-  static ref EXTERNS: RwLock<Option<Externs>> = RwLock::new(None);
+  static ref EXTERNS: ArcSwapOption<Externs> = ArcSwapOption::from(None);
   static ref INTERNS: RwLock<Interns> = RwLock::new(Interns::new());
 }
 
@@ -280,28 +282,15 @@ lazy_static! {
 /// until this has been called.
 ///
 pub fn set_externs(externs: Externs) {
-  let mut externs_ref = EXTERNS.write();
-  *externs_ref = Some(externs);
+  EXTERNS.store(Some(Arc::new(externs)));
 }
 
 fn with_externs<F, T>(f: F) -> T
 where
   F: FnOnce(&Externs) -> T,
 {
-  let externs_opt = EXTERNS.read();
-  let externs = externs_opt
-    .as_ref()
-    .unwrap_or_else(|| panic!("externs used before static initialization."));
-  f(externs)
-}
-
-fn with_externs_exclusive<F, T>(f: F) -> T
-where
-  F: FnOnce(&Externs) -> T,
-{
-  let externs_opt = EXTERNS.write();
-  let externs = externs_opt
-    .as_ref()
+  let externs_opt = EXTERNS.lease();
+  let externs = arc_swap::Lease::get_ref(&externs_opt)
     .unwrap_or_else(|| panic!("externs used before static initialization."));
   f(externs)
 }
