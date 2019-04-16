@@ -33,6 +33,16 @@ class DaemonSignalHandler(SignalHandler):
   def handle_sigint(self, signum, _frame):
     raise KeyboardInterrupt('remote client sent control-c!')
 
+def BL_write_to_file(msg):
+  with open('/tmp/logs', 'a') as f:
+    f.write('BL: {}\n'.format(msg))
+
+def noop_exit(code):
+  BL_write_to_file("Someone tried to exit with code {}!".format(code))
+  import traceback
+  with open('/tmp/logs', 'a') as f:
+    traceback.print_stack(file=f, limit=6)
+
 
 class DaemonExiter(Exiter):
   """An Exiter that emits unhandled tracebacks and exit codes via the Nailgun protocol.
@@ -65,6 +75,8 @@ class DaemonExiter(Exiter):
           )
         except Exception:
           pass
+
+    BL_write_to_file("DaemonPantsRunner Exitting")
 
     # Write a final message to stderr if present.
     if msg:
@@ -280,7 +292,7 @@ class DaemonPantsRunner(ProcessManager):
         setup_logging_from_options(bootstrap_options)
         # Otherwise, conduct a normal run.
         runner = LocalPantsRunner.create(
-          self._exiter,
+          Exiter(exiter=noop_exit),
           self._args,
           self._env,
           self._target_roots,
@@ -288,7 +300,7 @@ class DaemonPantsRunner(ProcessManager):
           self._options_bootstrapper,
         )
         runner.set_start_time(self._maybe_get_client_start_time_from_env(self._env))
-        runner.run(exit_on_completion=False)
+        runner.run()
       except KeyboardInterrupt:
         self._exiter.exit_and_fail('Interrupted by user.\n')
       except GracefulTerminationException as e:
@@ -296,6 +308,10 @@ class DaemonPantsRunner(ProcessManager):
           'Encountered graceful termination exception {}; exiting'.format(e))
         self._exiter.exit(e.exit_code)
       except Exception:
+        # LocalPantsRunner.set_start_time resets the global exiter,
+        # which used to be okay, because it was process-local,
+        # but now we need to un-reset it here.
+        ExceptionSink.reset_exiter(self._exiter)
         # TODO: We override sys.excepthook above when we call ExceptionSink.set_exiter(). That
         # excepthook catches `SignalHandledNonLocalExit`s from signal handlers, which isn't
         # happening here, so something is probably overriding the excepthook. By catching Exception

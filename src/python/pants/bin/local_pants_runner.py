@@ -224,9 +224,9 @@ class LocalPantsRunner(object):
     self._exiter = LocalExiter(self._run_tracker, self._repro, exiter=self._exiter)
     ExceptionSink.reset_exiter(self._exiter)
 
-  def run(self, exit_on_completion=True):
+  def run(self):
     with maybe_profiled(self._profile_path):
-      self._run(exit_on_completion)
+      self._run()
 
   def _maybe_run_v1(self):
     if not self._global_options.v1:
@@ -243,6 +243,9 @@ class LocalPantsRunner(object):
       self._target_roots,
       self._exiter
     )
+    if self._options.help_request:
+      return goal_runner_factory.handle_help()
+
     return goal_runner_factory.create().run()
 
   def _maybe_run_v2(self):
@@ -281,7 +284,7 @@ class LocalPantsRunner(object):
         max_code = code
     return max_code
 
-  def _run(self, exit_on_completion):
+  def _run(self):
     try:
       engine_result = self._maybe_run_v2()
       goal_runner_result = self._maybe_run_v1()
@@ -298,5 +301,4 @@ class LocalPantsRunner(object):
       goal_runner_result,
       run_tracker_result
     )
-    if exit_on_completion:
-      self._exiter.exit(final_exit_code)
+    self._exiter.exit(final_exit_code)
