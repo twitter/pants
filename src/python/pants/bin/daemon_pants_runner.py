@@ -265,6 +265,26 @@ class DaemonPantsRunner(ProcessManager):
     client_start_time = env.pop('PANTSD_RUNTRACKER_CLIENT_START_TIME', None)
     return None if client_start_time is None else float(client_start_time)
 
+  @contextmanager
+  def encapsulated_global_logger(self):
+    import logging
+    import copy
+    global_logger = logging.getLogger()
+    old_handlers = copy.copy(global_logger.handlers)
+    BL_write_to_file("Before yielding, global logger is {!r}, handlers are {}".format(id(global_logger), str(global_logger.handlers)))
+    try:
+      yield
+      BL_write_to_file("After yielding, global logger is {!r}, handlers are {}".format(id(global_logger), str(global_logger.handlers)))
+    finally:
+      new_handlers = global_logger.handlers
+      for handler in new_handlers:
+        global_logger.removeHandler(handler)
+      for handler in old_handlers:
+        BL_write_to_file("Re-adding handler {}".format(handler))
+        global_logger.addHandler(handler)
+
+    BL_write_to_file("After resetting handlers, global logger is {!r}, handlers are {}".format(id(global_logger), str(global_logger.handlers)))
+
   def run(self):
     """Fork, daemonize and invoke self.post_fork_child() (via ProcessManager).
 
@@ -281,7 +301,9 @@ class DaemonPantsRunner(ProcessManager):
     NailgunProtocol.send_pgrp(self._socket, os.getpgrp() * -1)
 
     # Invoke a Pants run with stdio redirected and a proxied environment.
-    with self.nailgunned_stdio(self._socket, self._env), hermetic_environment_as(**self._env):
+    with self.nailgunned_stdio(self._socket, self._env), \
+      hermetic_environment_as(**self._env), \
+      self.encapsulated_global_logger():
       try:
         # Clean global state.
         clean_global_runtime_state(reset_subsystem=True)
