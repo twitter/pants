@@ -85,6 +85,8 @@ class NativeHandler(StreamHandler):
   def flush(self):
     self.native.flush_log()
 
+  def __repr__(self):
+    return "NativeHandler(id={}, level={}, filename={}, stream={})".format(id(self), self.level, self.native_filename, self.stream)
 
 def create_native_pantsd_file_log_handler(level, native, native_filename):
   fd = native.setup_pantsd_logger(native_filename, get_numeric_level(level))
@@ -155,6 +157,11 @@ def setup_logging(level, console_stream=None, log_dir=None, scope=None, log_name
 
   log_filename = None
   file_handler = None
+
+  with open('/tmp/logs', 'a') as f:
+    f.write("BL: called setup_logging with level: {},\n console_stream: {} ({}),\n log_dir: {},\n scope: {},\n log_name: {},\n native: {}\n".format(
+      level, console_stream, id(console_stream), log_dir, scope, log_name, native
+    ))
 
   # A custom log handler for sub-debug trace logging.
   def trace(self, message, *args, **kwargs):

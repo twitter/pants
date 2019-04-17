@@ -33,15 +33,29 @@ class DaemonSignalHandler(SignalHandler):
   def handle_sigint(self, signum, _frame):
     raise KeyboardInterrupt('remote client sent control-c!')
 
+  def handle_sigterm(self, signum, _frame):
+    try:
+      BL_write_to_file("Before the shutdown")
+      self.daemon.shutdown()
+      BL_write_to_file("After the shutdown")
+    except Exception as e:
+      BL_write_to_file("Exception while handling sigterm {!r}".format(e))
+
+
 def BL_write_to_file(msg):
   with open('/tmp/logs', 'a') as f:
     f.write('BL: {}\n'.format(msg))
 
+class NoopExiter(Exiter):
+  def exit(self, result, *args, **kwargs):
+    BL_write_to_file("Someone tried to exit with code {}!".format(result))
+    # super(NoopExiter, self).exit(result=result, out=sys.stderr, *args, **kwargs)
+
 def noop_exit(code):
-  BL_write_to_file("Someone tried to exit with code {}!".format(code))
-  import traceback
-  with open('/tmp/logs', 'a') as f:
-    traceback.print_stack(file=f, limit=6)
+  pass
+  # import traceback
+  # with open('/tmp/logs', 'a') as f:
+  #   traceback.print_stack(file=f, limit=6)
 
 
 class DaemonExiter(Exiter):
@@ -76,7 +90,7 @@ class DaemonExiter(Exiter):
         except Exception:
           pass
 
-    BL_write_to_file("DaemonPantsRunner Exitting")
+    BL_write_to_file("DaemonPantsRunner Exitting with code {} and msg {}".format(result, msg))
 
     # Write a final message to stderr if present.
     if msg:
@@ -295,7 +309,7 @@ class DaemonPantsRunner(ProcessManager):
         setup_logging_from_options(bootstrap_options)
         # Otherwise, conduct a normal run.
         runner = LocalPantsRunner.create(
-          Exiter(exiter=noop_exit),
+          NoopExiter(),
           self._args,
           self._env,
           self._target_roots,
