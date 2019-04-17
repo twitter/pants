@@ -4,10 +4,12 @@
 
 from __future__ import absolute_import, division, print_function, unicode_literals
 
+import copy
 import logging
 import os
 import sys
 from collections import namedtuple
+from contextlib import contextmanager
 from logging import StreamHandler
 
 from future.moves.http import client
@@ -106,6 +108,23 @@ def create_native_stderr_log_handler(level, native, stream=None):
 def get_numeric_level(level):
   return logging._checkLevel(level)
 
+@contextmanager
+def encapsulated_global_logger():
+  """Record all the handlers of the current global logger, yield, and reset that logger.
+  This is useful in the case where we want to easily restore state after calling setup_logging.
+  For instance, when DaemonPantsRunner creates an instance of LocalPantsRunner it sets up specific
+  nailgunned logging, which we want to undo once the LocalPantsRunner has finished runnnig.
+  """
+  global_logger = logging.getLogger()
+  old_handlers = copy.copy(global_logger.handlers)
+  try:
+    yield
+  finally:
+    new_handlers = global_logger.handlers
+    for handler in new_handlers:
+      global_logger.removeHandler(handler)
+    for handler in old_handlers:
+      global_logger.addHandler(handler)
 
 def setup_logging(level, console_stream=None, log_dir=None, scope=None, log_name=None, native=None):
   """Configures logging for a given scope, by default the global scope.
