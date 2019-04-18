@@ -31,6 +31,7 @@ from pants.util.socket import teardown_socket
 class DaemonSignalHandler(SignalHandler):
 
   def handle_sigint(self, signum, _frame):
+    BL_write_to_file("DSH received sigint!")
     raise KeyboardInterrupt('remote client sent control-c!')
 
   def handle_sigterm(self, signum, _frame):
@@ -50,12 +51,6 @@ class NoopExiter(Exiter):
   def exit(self, result, *args, **kwargs):
     BL_write_to_file("Someone tried to exit with code {}!".format(result))
     # super(NoopExiter, self).exit(result=result, out=sys.stderr, *args, **kwargs)
-
-def noop_exit(code):
-  pass
-  # import traceback
-  # with open('/tmp/logs', 'a') as f:
-  #   traceback.print_stack(file=f, limit=6)
 
 
 class DaemonExiter(Exiter):
@@ -279,7 +274,6 @@ class DaemonPantsRunner(ProcessManager):
     client_start_time = env.pop('PANTSD_RUNTRACKER_CLIENT_START_TIME', None)
     return None if client_start_time is None else float(client_start_time)
 
-
   def run(self):
     """Fork, daemonize and invoke self.post_fork_child() (via ProcessManager).
 
@@ -318,13 +312,17 @@ class DaemonPantsRunner(ProcessManager):
         )
         runner.set_start_time(self._maybe_get_client_start_time_from_env(self._env))
         runner.run()
+        BL_write_to_file("After the run has finished")
       except KeyboardInterrupt:
+        BL_write_to_file("Keyboard interrupt in DPR")
         self._exiter.exit_and_fail('Interrupted by user.\n')
       except GracefulTerminationException as e:
         ExceptionSink.log_exception(
           'Encountered graceful termination exception {}; exiting'.format(e))
         self._exiter.exit(e.exit_code)
       except Exception:
+        BL_write_to_file("WE at least have an exception in DPR!")
+
         # LocalPantsRunner.set_start_time resets the global exiter,
         # which used to be okay, because it was process-local,
         # but now we need to un-reset it here.

@@ -82,6 +82,17 @@ class _LoggerStream(object):
     return self
 
 
+class PantsDaemonSignalHandler(SignalHandler):
+
+  def __init__(self, services):
+    super(PantsDaemonSignalHandler, self).__init__()
+    self._services = services
+
+  def handle_sigint(self, signum, _frame):
+    for service in self._services:
+      service.record_exception(KeyboardInterrupt('remote client sent control-c!'))
+
+
 class PantsDaemon(FingerprintedProcessManager):
   """A daemon that manages PantsService instances."""
 
@@ -359,6 +370,7 @@ class PantsDaemon(FingerprintedProcessManager):
           raise PantsDaemon.RuntimeFailure('service failure for {}, shutting down!'.format(service))
         else:
           # Avoid excessive CPU utilization.
+          logging.info("BL: Joining service {}, {}  ".format(service, service_thread))
           service_thread.join(self.JOIN_TIMEOUT_SECONDS)
 
   def _write_named_sockets(self, socket_map):

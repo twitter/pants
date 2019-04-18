@@ -482,6 +482,9 @@ class TestPantsDaemonIntegration(PantsDaemonIntegrationTestBase):
       waiter_run = waiter_handle.join()
       self.assert_failure(waiter_run)
 
+
+      print("BL: Run finished, stderr data is {}".format(waiter_run.stderr_data))
+
       for regexp in regexps:
         assertRegex(self, waiter_run.stderr_data, regexp)
 
