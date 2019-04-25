@@ -2,7 +2,7 @@
 # Copyright 2014 Pants project contributors (see CONTRIBUTORS.md).
 # Licensed under the Apache License, Version 2.0 (see LICENSE).
 
-set -e
+set -exo pipefail
 
 ROOT=$(cd $(dirname "${BASH_SOURCE[0]}") && cd "$(git rev-parse --show-toplevel)" && pwd)
 source ${ROOT}/build-support/common.sh
@@ -14,7 +14,7 @@ _OPTS="hdnftcloepqw2"
 
 while getopts "${_OPTS}"  opt; do
   case ${opt} in
-    2) python_two="true" ;;
+    2) export python_two="true" ;;
     *) ;;  # skip over other args to be parsed later
   esac
 done
