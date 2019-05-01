@@ -9,7 +9,6 @@ import os
 import re
 import shutil
 
-from pex import pep425tags
 from pex.interpreter import PythonInterpreter
 
 from pants.backend.native.targets.native_library import NativeLibrary
@@ -237,10 +236,16 @@ class BuildLocalPythonDistributions(Task):
     """
     egg_info_snapshot_tag_args = ['egg_info', '--tag-build=+{}'.format(snapshot_fingerprint)]
     bdist_whl_args = ['bdist_wheel']
-    if is_platform_specific:
-      platform_args = ['--plat-name', pep425tags.get_platform()]
-    else:
-      platform_args = []
+    # TODO: revert this, but figure out how to make platforms match in
+    # `self._python_native_code_settings.check_build_for_current_platform_only()` in
+    # resolve_requirements_task_base.py!
+    # 3b71834ca0f6893a7fca5db2ef5da2a0bc7ec0da [PythonTests force default platform resolves (#7618)]
+    # may^ be related!
+    # if is_platform_specific:
+    #   platform_args = ['--plat-name', pep425tags.get_platform()]
+    # else:
+    #   platform_args = []
+    platform_args = []
 
     dist_dir_args = ['--dist-dir', self._DIST_OUTPUT_DIR]
 

@@ -8,9 +8,11 @@ import os
 from builtins import str
 from contextlib import contextmanager
 
+# from pex import pep425tags
 from pex.interpreter import PythonInterpreter
 from pex.pex import PEX
 from pex.pex_builder import PEXBuilder
+# from pex.pex_info import PexInfo
 
 from pants.backend.python.python_requirement import PythonRequirement
 from pants.backend.python.subsystems import pex_build_util
@@ -58,6 +60,20 @@ class ResolveRequirementsTaskBase(Task):
     # on relevant codegen tasks, if any.
     round_manager.optional_data('python')
 
+  def _get_platforms(self):
+    # We need to ensure that we are resolving for only the current platform if we are
+    # including local python dist targets that have native extensions.
+    targets_by_platform = pex_build_util.targets_by_platform(
+      self.context.targets(), self._python_setup)
+    if self._python_native_code_settings.check_build_for_current_platform_only(targets_by_platform):
+      platforms = ['current']
+      # platforms = [pep425tags.get_platform()]
+    else:
+      platforms = list(sorted(targets_by_platform.keys()))
+      # platforms = ['current']
+      # platforms = [pep425tags.get_platform()]
+    return platforms
+
   def resolve_requirements(self, interpreter, req_libs):
     """Requirements resolution for PEX files.
 
@@ -75,14 +91,6 @@ class ResolveRequirementsTaskBase(Task):
       else:
         target_set_id = 'no_targets'
 
-      # We need to ensure that we are resolving for only the current platform if we are
-      # including local python dist targets that have native extensions.
-      targets_by_platform = pex_build_util.targets_by_platform(self.context.targets(), self._python_setup)
-      if self._python_native_code_settings.check_build_for_current_platform_only(targets_by_platform):
-        platforms = ['current']
-      else:
-        platforms = list(sorted(targets_by_platform.keys()))
-
       path = os.path.realpath(os.path.join(self.workdir, str(interpreter.identity), target_set_id))
       # Note that we check for the existence of the directory, instead of for invalid_vts,
       # to cover the empty case.
@@ -91,7 +99,7 @@ class ResolveRequirementsTaskBase(Task):
           pex_builder = PexBuilderWrapper.Factory.create(
             builder=PEXBuilder(path=safe_path, interpreter=interpreter, copy=True),
             log=self.context.log)
-          pex_builder.add_requirement_libs_from(req_libs, platforms=platforms)
+          pex_builder.add_requirement_libs_from(req_libs, platforms=self._get_platforms())
           pex_builder.freeze()
     return PEX(path, interpreter=interpreter)
 
@@ -112,13 +120,13 @@ class ResolveRequirementsTaskBase(Task):
         pex_builder = PexBuilderWrapper.Factory.create(
           builder=PEXBuilder(path=safe_path, interpreter=interpreter, copy=True),
           log=self.context.log)
-        pex_builder.add_resolved_requirements(reqs)
+        pex_builder.add_resolved_requirements(reqs, platforms=self._get_platforms())
         pex_builder.freeze()
     return PEX(path, interpreter=interpreter)
 
   @classmethod
   @contextmanager
-  def merged_pex(cls, path, pex_info, interpreter, pexes, interpeter_constraints=None):
+  def merged_pex(cls, path, pex_info, interpreter, pexes, interpreter_constraints=None):
     """Yields a pex builder at path with the given pexes already merged.
 
     :rtype: :class:`pex.pex_builder.PEXBuilder`
@@ -130,13 +138,13 @@ class ResolveRequirementsTaskBase(Task):
 
     with safe_concurrent_creation(path) as safe_path:
       builder = PEXBuilder(safe_path, interpreter, pex_info=pex_info)
-      if interpeter_constraints:
-        for constraint in interpeter_constraints:
+      if interpreter_constraints:
+        for constraint in interpreter_constraints:
           builder.add_interpreter_constraint(constraint)
       yield builder
 
   @classmethod
-  def merge_pexes(cls, path, pex_info, interpreter, pexes, interpeter_constraints=None):
+  def merge_pexes(cls, path, pex_info, interpreter, pexes, interpreter_constraints=None):
     """Generates a merged pex at path."""
-    with cls.merged_pex(path, pex_info, interpreter, pexes, interpeter_constraints) as builder:
+    with cls.merged_pex(path, pex_info, interpreter, pexes, interpreter_constraints) as builder:
       builder.freeze()
