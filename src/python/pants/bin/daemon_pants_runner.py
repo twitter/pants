@@ -5,7 +5,9 @@
 from __future__ import absolute_import, division, print_function, unicode_literals
 
 import datetime
+import objgraph
 import os
+import random
 import sys
 import termios
 import time
@@ -108,6 +110,7 @@ class DaemonPantsRunner(object):
 
   N.B. this class is primarily used by the PailgunService in pantsd.
   """
+  first_run = True
 
   @classmethod
   def create(cls, sock, args, env, services, scheduler_service):
@@ -261,6 +264,18 @@ class DaemonPantsRunner(object):
   def run(self):
     # Ensure anything referencing sys.argv inherits the Pailgun'd args.
     sys.argv = self._args
+
+    # Get a list of dict's new object ids to generate object graph for debugging
+    new_ids = objgraph.get_new_ids()['dict']
+    # Ramdomly pick 500 ids for sampling
+    random_ids = random.sample(new_ids, 500)
+    new_dict = objgraph.at_addrs(random_ids)
+    if not DaemonPantsRunner.first_run:
+      # Generate the object graph
+      print("Generating objgraph ....(could take several minutes depends on sample object size  )")
+      objgraph.show_backrefs(new_dict, max_depth=10, extra_ignore=[id(locals())])
+
+    DaemonPantsRunner.first_run = False
 
     # Broadcast our process group ID (in PID form - i.e. negated) to the remote client so
     # they can send signals (e.g. SIGINT) to all processes in the runners process group.
