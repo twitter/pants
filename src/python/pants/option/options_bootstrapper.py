@@ -11,6 +11,7 @@ import sys
 from builtins import filter
 
 from future.utils import iteritems
+from memory_profiler import profile
 
 from pants.base.build_environment import get_default_pants_config_file
 from pants.engine.fs import FileContent
@@ -26,6 +27,8 @@ from pants.util.strutil import ensure_text
 
 
 logger = logging.getLogger(__name__)
+# memory_profiler output
+mem_profile = open('/tmp/mem_profile_for_' + os.path.splitext(os.path.basename(__file__))[0], 'a')
 
 
 class OptionsBootstrapper(datatype([
@@ -178,7 +181,9 @@ class OptionsBootstrapper(datatype([
     """
     return self.bootstrap_options
 
+  @profile(stream=mem_profile)
   @memoized_method
+  @profile(stream=mem_profile)
   def _full_options(self, known_scope_infos):
     bootstrap_option_values = self.get_bootstrap_options().for_global_scope()
     options = Options.create(self.env,

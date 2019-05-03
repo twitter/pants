@@ -11,6 +11,7 @@ import termios
 import time
 from builtins import open, zip
 from contextlib import contextmanager
+from memory_profiler import profile
 
 from pants.base.build_environment import get_buildroot
 from pants.base.exception_sink import ExceptionSink
@@ -22,6 +23,9 @@ from pants.java.nailgun_io import NailgunStreamStdinReader, NailgunStreamWriter
 from pants.java.nailgun_protocol import ChunkType, MaybeShutdownSocket, NailgunProtocol
 from pants.util.contextutil import hermetic_environment_as, stdio_as
 from pants.util.socket import teardown_socket
+
+# memory_profiler output
+mem_profile = open('/tmp/mem_profile_for_' + os.path.splitext(os.path.basename(__file__))[0], 'a')
 
 
 class NoopExiter(Exiter):
@@ -258,6 +262,7 @@ class DaemonPantsRunner(object):
     client_start_time = env.pop('PANTSD_RUNTRACKER_CLIENT_START_TIME', None)
     return None if client_start_time is None else float(client_start_time)
 
+  @profile(stream=mem_profile)
   def run(self):
     # Ensure anything referencing sys.argv inherits the Pailgun'd args.
     sys.argv = self._args

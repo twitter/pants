@@ -5,7 +5,9 @@
 from __future__ import absolute_import, division, print_function, unicode_literals
 
 import logging
+import os
 from builtins import object, str
+from memory_profiler import profile
 
 from pants.base.build_environment import get_buildroot
 from pants.base.exception_sink import ExceptionSink
@@ -26,6 +28,8 @@ from pants.util.contextutil import maybe_profiled
 
 
 logger = logging.getLogger(__name__)
+# memory_profiler output
+mem_profile = open('/tmp/mem_profile_for_' + os.path.splitext(os.path.basename(__file__))[0], 'a')
 
 
 class LocalExiter(Exiter):
@@ -239,6 +243,7 @@ class LocalPantsRunner(object):
       result = help_printer.print_help()
       self._exiter(result)
 
+  @profile(stream=mem_profile)
   def _maybe_run_v1(self):
     v1_goals, ambiguous_goals, _ = self._options.goals_by_version
     if not v1_goals and (not ambiguous_goals or not self._global_options.v1):
@@ -286,6 +291,7 @@ class LocalPantsRunner(object):
         max_code = code
     return max_code
 
+  @profile(stream=mem_profile)
   def _run(self):
     try:
       self._maybe_handle_help()

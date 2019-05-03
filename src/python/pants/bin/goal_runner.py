@@ -5,8 +5,10 @@
 from __future__ import absolute_import, division, print_function, unicode_literals
 
 import logging
+import os
 import sys
 from builtins import object
+from memory_profiler import profile
 
 from pants.base.cmd_line_spec_parser import CmdLineSpecParser
 from pants.base.workunit import WorkUnit, WorkUnitLabel
@@ -22,6 +24,8 @@ from pants.task.task import QuietTaskMixin
 
 
 logger = logging.getLogger(__name__)
+# memory_profiler output
+mem_profile = open('/tmp/mem_profile_for_' + os.path.splitext(os.path.basename(__file__))[0], 'a')
 
 
 class GoalRunnerFactory(object):
@@ -122,6 +126,7 @@ class GoalRunnerFactory(object):
 
       return goals, context
 
+  @profile(stream=mem_profile)
   def create(self):
     goals, context = self._setup_context()
     return GoalRunner(context=context,
@@ -172,6 +177,7 @@ class GoalRunner(object):
 
     return result
 
+  @profile(stream=mem_profile)
   def _run_goals(self):
     should_kill_nailguns = self._kill_nailguns
 
