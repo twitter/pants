@@ -10,6 +10,7 @@ from builtins import str
 from future.utils import binary_type, text_type
 from pex.interpreter import PythonInterpreter
 from pex.pex import PEX
+# from pex.pex_info import PexInfo
 
 from pants.backend.python.subsystems.pex_build_util import is_python_target
 from pants.backend.python.subsystems.python_setup import PythonSetup
@@ -134,6 +135,12 @@ class PythonExecutionTaskBase(ResolveRequirementsTaskBase):
           # in the target set's dependency closure.
           pexes = [extra_requirements_pex] + pexes
 
+        prepend_requirements_pex = self.context.products.get_data(
+          ResolveRequirements.PREPEND_REQUIREMENTS_PEX)
+        if prepend_requirements_pex:
+          pexes = [prepend_requirements_pex] + pexes
+
+        pin_selected_interpreter = True
         if pin_selected_interpreter:
           constraints = {str(interpreter.identity.requirement)}
         else:
@@ -143,7 +150,6 @@ class PythonExecutionTaskBase(ResolveRequirementsTaskBase):
           }
           self.context.log.debug('target set {} has constraints: {}'
                                  .format(relevant_targets, constraints))
-
 
         with self.merged_pex(path, pex_info, interpreter, pexes, constraints) as builder:
           for extra_file in self.extra_files():
