@@ -1,5 +1,5 @@
 /*
- * http://stackoverflow.com/questions/1931307/antlr-is-there-a-simple-example
+ * https://stackoverflow.com/questions/1931307/antlr-is-there-a-simple-example
  *
  * Evaluate expressions using the 4 basic math operatiors: +, -, /, * and nest
  * with parenthesis.

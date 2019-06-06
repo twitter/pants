@@ -54,7 +54,7 @@ class JavadocGen(JvmdocGen):
             '-d', gendir]
 
     # Always provide external linking for java API
-    offlinelinks = {'http://download.oracle.com/javase/8/docs/api/'}
+    offlinelinks = {'https://download.oracle.com/javase/8/docs/api/'}
 
     def link(target):
       for jar in target.jar_dependencies:

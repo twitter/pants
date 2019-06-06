@@ -13,7 +13,7 @@ python_requirement_library(
     # to fetch it from antlr.org instead. If at any point it reappears on pypi, the
     # repository arg can be removed.
     python_requirement('antlr_python_runtime==3.1.3',
-                       repository='http://www.antlr3.org/download/Python/')
+                       repository='https://www.antlr3.org/download/Python/')
   ]
 )
 

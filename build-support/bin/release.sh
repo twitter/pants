@@ -470,7 +470,7 @@ try:
 except ImportError:
   from urllib import quote_plus
 root = ET.parse("${wheel_listing}")
-ns = {'s3': 'http://s3.amazonaws.com/doc/2006-03-01/'}
+ns = {'s3': 'https://s3.amazonaws.com/doc/2006-03-01/'}
 for key in root.findall('s3:Contents/s3:Key', ns):
   # Because filenames may contain characters that have different meanings
   # in URLs (namely '+'), # print the key both as url-encoded and as a file path.

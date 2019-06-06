@@ -27,7 +27,7 @@ class MissingContextManager(CheckstylePlugin):
   def nits(self):
     with_contexts = set(self.iter_ast_types(ast.With))
     # Grammar changed between Python 2 vs Python 3 to access the with statement's surrounding expressions.
-    # Refer to http://joao.npimentel.net/2015/07/23/python-2-vs-python-3-ast-differences/.
+    # Refer to https://joao.npimentel.net/2015/07/23/python-2-vs-python-3-ast-differences/.
     with_context_exprs = ({node.context_expr for with_context in with_contexts for node in with_context.items}
                           if PY3 else
                           {node.context_expr for node in with_contexts})
