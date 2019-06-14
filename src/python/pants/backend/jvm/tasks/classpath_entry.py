@@ -4,8 +4,6 @@
 
 from __future__ import absolute_import, division, print_function, unicode_literals
 
-import threading
-
 
 class ClasspathEntry(object):
   """Represents a java classpath entry.
@@ -17,16 +15,9 @@ class ClasspathEntry(object):
     self._path = path
     self._directory_digest = directory_digest
 
-    # We avoid re-materializing a ClasspathEntry if e.g. more than one task in a single pants run
-    # needs it.
-    # Note that we do not avoid re-materializing across pants runs, but the engine will attempt to
-    # make this cheap by not re-writing files which already exist during materialization.
-    self._has_been_materialized_lock = threading.Lock()
-    self._has_been_materialized = False
-
   @property
   def path(self):
-    """Returns the absolute path to this classpath entry within the pants workdir.
+    """Returns the pants internal path of this classpath entry.
 
     Suitable for use in constructing classpaths for pants executions and pants generated artifacts.
 
@@ -54,15 +45,6 @@ class ClasspathEntry(object):
     :rtype: bool
     """
     return False
-
-  @property
-  def has_been_materialized(self):
-    with self._has_been_materialized_lock:
-      return self._has_been_materialized
-
-  def mark_as_materialized(self):
-    with self._has_been_materialized_lock:
-      self._has_been_materialized = True
 
   def __hash__(self):
     return hash((self.path, self.directory_digest))

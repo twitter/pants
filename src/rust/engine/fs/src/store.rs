@@ -684,9 +684,7 @@ impl Store {
     self
       .load_file_bytes_with(digest, move |bytes| {
         OpenOptions::new()
-          // Only create the file if it doesn't already exist; assume that if the file already
-          // exists, it is correct.
-          .create_new(true)
+          .create(true)
           .write(true)
           .mode(if is_executable { 0o755 } else { 0o644 })
           .open(&destination)
@@ -696,10 +694,6 @@ impl Store {
             // processes to read; as such, we must ensure data is flushed to disk and visible
             // to them as opposed to just our process.
             f.sync_all()
-          })
-          .or_else(|e| match e.kind() {
-            std::io::ErrorKind::AlreadyExists => Ok(()),
-            err => Err(err),
           })
           .map_err(|e| format!("Error writing file {:?}: {:?}", destination, e))
       })
