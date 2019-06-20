@@ -242,14 +242,14 @@ class RscCompile(ZincCompile, MirroredTargetOptionMixin):
     super(RscCompile, self).create_empty_extra_products()
 
     compile_classpath = self.context.products.get_data('compile_classpath')
-    runtime_classpath = self.context.products.get_data('runtime_classpath')
+    unmaterialized_runtime_classpath = self.context.products.get_data('unmaterialized_runtime_classpath')
     classpath_product = self.context.products.get_data('rsc_mixed_compile_classpath')
     if not classpath_product:
       classpath_product = self.context.products.get_data(
         'rsc_mixed_compile_classpath', compile_classpath.copy)
     else:
       classpath_product.update(compile_classpath)
-    classpath_product.update(runtime_classpath)
+    classpath_product.update(unmaterialized_runtime_classpath)
 
   def select(self, target):
     if not isinstance(target, JvmTarget):
@@ -487,7 +487,7 @@ class RscCompile(ZincCompile, MirroredTargetOptionMixin):
       'zinc-java': lambda: zinc_jobs.append(
         make_zinc_job(
           compile_target,
-          input_product_key='runtime_classpath',
+          input_product_key='unmaterialized_runtime_classpath',
           output_products=[
             runtime_classpath_product,
             self.context.products.get_data('rsc_mixed_compile_classpath'),
@@ -498,7 +498,7 @@ class RscCompile(ZincCompile, MirroredTargetOptionMixin):
         make_zinc_job(
           compile_target,
           input_product_key='rsc_mixed_compile_classpath',
-          # NB: We want to ensure the 'runtime_classpath' product *only* contains the outputs of
+          # NB: We want to ensure the 'unmaterialized_runtime_classpath' product *only* contains the outputs of
           # zinc compiles, and that the 'rsc_mixed_compile_classpath' entries for rsc-compatible targets
           # *only* contain the output of an rsc compile for that target.
           output_products=[

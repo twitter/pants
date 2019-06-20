@@ -270,7 +270,7 @@ class JvmCompile(CompilerOptionSetsMixin, NailgunTaskBase):
     """Produces a dictionary of any extra, out-of-band resources for a target.
 
     E.g., targets that produce scala compiler plugins or annotation processor files
-    produce an info file. The resources will be added to the runtime_classpath.
+    produce an info file. The resources will be added to the unmaterialized_runtime_classpath.
     :return: A dict from classpath-relative filename to file content.
     """
     result = {}
@@ -310,9 +310,9 @@ class JvmCompile(CompilerOptionSetsMixin, NailgunTaskBase):
         fp.write('\n')
 
   def create_empty_extra_products(self):
-    """Create any products the subclass task supports in addition to the runtime_classpath.
+    """Create any products the subclass task supports in addition to the unmaterialized_runtime_classpath.
 
-    The runtime_classpath is constructed by default.
+    The unmaterialized_runtime_classpath is constructed by default.
     """
 
   def register_extra_products_from_contexts(self, targets, compile_contexts):
@@ -365,7 +365,7 @@ class JvmCompile(CompilerOptionSetsMixin, NailgunTaskBase):
   @memoized_property
   def _missing_deps_finder(self):
     dep_analyzer = JvmDependencyAnalyzer(get_buildroot(),
-                                         self.context.products.get_data('runtime_classpath'))
+                                         self.context.products.get_data('unmaterialized_runtime_classpath'))
     return MissingDependencyFinder(dep_analyzer, CompileErrorExtractor(
       self.get_options().class_not_found_error_patterns))
 
@@ -392,8 +392,8 @@ class JvmCompile(CompilerOptionSetsMixin, NailgunTaskBase):
     if not relevant_targets:
       return
 
-    # Clone the compile_classpath to the runtime_classpath.
-    classpath_product = self.create_runtime_classpath()
+    # Clone the compile_classpath to the unmaterialized_runtime_classpath.
+    classpath_product = self.create_unmaterialized_runtime_classpath()
 
     fingerprint_strategy = DependencyContext.global_instance().create_fingerprint_strategy(
         classpath_product)
@@ -428,11 +428,11 @@ class JvmCompile(CompilerOptionSetsMixin, NailgunTaskBase):
       return context.jar_file
     return context.classes_dir
 
-  def create_runtime_classpath(self):
+  def create_unmaterialized_runtime_classpath(self):
     compile_classpath = self.context.products.get_data('compile_classpath')
-    classpath_product = self.context.products.get_data('runtime_classpath')
+    classpath_product = self.context.products.get_data('unmaterialized_runtime_classpath')
     if not classpath_product:
-      classpath_product = self.context.products.get_data('runtime_classpath', compile_classpath.copy)
+      classpath_product = self.context.products.get_data('unmaterialized_runtime_classpath', compile_classpath.copy)
     else:
       classpath_product.update(compile_classpath)
 
@@ -743,7 +743,7 @@ class JvmCompile(CompilerOptionSetsMixin, NailgunTaskBase):
                 self._default_work_for_vts,
                 ivts,
                 compile_context,
-                'runtime_classpath',
+                'unmaterialized_runtime_classpath',
                 counter,
                 all_compile_contexts,
                 classpath_product),

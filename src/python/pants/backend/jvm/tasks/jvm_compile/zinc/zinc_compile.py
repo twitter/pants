@@ -564,7 +564,10 @@ class BaseZincCompile(JvmCompile):
     active_plugins = {}
     buildroot = get_buildroot()
 
-    cp_product = self.context.products.get_data('runtime_classpath')
+    # TODO: This method mostly deals with 3rdparty deps, which are currently always materialized,
+    # but we will eventually execute resolves in the hermetic environment, which would invalidate
+    # that assumption.
+    cp_product = self.context.products.get_data('unmaterialized_runtime_classpath')
     for classpath_element in classpath:
       name = self._maybe_get_plugin_name(classpath_element)
       if name in plugin_names:
@@ -629,7 +632,7 @@ class ZincCompile(BaseZincCompile):
 
   @classmethod
   def product_types(cls):
-    return ['runtime_classpath', 'zinc_analysis', 'zinc_args']
+    return ['unmaterialized_runtime_classpath', 'zinc_analysis', 'zinc_args']
 
   def select(self, target):
     # Require that targets are marked for JVM compilation, to differentiate from

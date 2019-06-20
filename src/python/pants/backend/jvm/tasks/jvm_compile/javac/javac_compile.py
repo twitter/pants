@@ -68,7 +68,7 @@ class JavacCompile(JvmCompile):
 
   @classmethod
   def product_types(cls):
-    return ['runtime_classpath']
+    return ['unmaterialized_runtime_classpath']
 
   def __init__(self, *args, **kwargs):
     super(JavacCompile, self).__init__(*args, **kwargs)
