@@ -19,7 +19,6 @@ class _ClasspathEntriesDigestFingerprintStrategy(FingerprintStrategy):
     self._unmaterialized_runtime_classpath = unmaterialized_runtime_classpath
 
   def compute_fingerprint(self, target):
-    entries = 
     hasher = hashlib.sha1()
     for entry in self._unmaterialized_runtime_classpath.get_classpath_entries_for_targets([target]):
       dd = entry.directory_digest
@@ -45,9 +44,9 @@ class MaterializeClasspath(Task):
   def create_target_dirs(self):
     return True
 
-  def _compute_output_entries(self, target, classpath_products):
+  def _compute_output_entries(self, vt, unmaterialized_product, materialized_product):
     """Computes materialized entries for the given target in cases where entries have digests.
-    
+
     The output entries will be located relative to this task's target directories.
     """
     result = []
@@ -58,19 +57,23 @@ class MaterializeClasspath(Task):
 
       # Clone the entry with a new path.
       output_entry = input_entry.copy()
-      output_entry.path = ...
-      # TODO: Relativizing this will be interesting for jars. But could maybe just make up a new name.
+      # TODO: Hm. The Digest represents a more deeply nested thing, but we have its absolute path
+      # as part of the classpath entry. We need to re-relativize it here.
+      output_entry.path = os.path.join(vt.results_dir, str(idx))
+
+    materialized_product.add_for_target(vt.target, result)
 
   def execute(self):
     unmaterialized_product = self.context.products.get_data('unmaterialized_runtime_classpath')
     materialized_product = self.context.products.get_data('runtime_classpath')
+                                                          init_func=ClasspathProducts.init_func(
+                                                            self.get_options().pants_workdir))
     with self.invalidated(self.context.targets(),
-                          invalidate_dependents=True,
                           fingerprint_strategy=fingerprint_strategy) as invalidation_check:
       # Relativize the classpath entry to our output directory, and then materialize it there
       # if need be.
       for vt in invalidation_check.all_vts:
-        entry_mapping = self._compute_entry_mapping(target, unmaterialized_product)
+        entry_mapping = self._compute_entry_mapping(vt, unmaterialized_product)
         if not vt.valid:
           self._materialize(target, entry_mapping)
         self._publish(target, entry_mapping)
