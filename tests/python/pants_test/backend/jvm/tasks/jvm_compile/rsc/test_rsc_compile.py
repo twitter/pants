@@ -92,13 +92,13 @@ class RscCompileTest(NailgunTaskTestBase):
       target_type=ScalaLibrary,
       sources=['com/example/Foo.scala'],
       dependencies=[],
-      tags={'use-compiler:rsc-then-zinc'},
     )
 
     with temporary_dir() as tmp_dir:
       invalid_targets = [java_target, scala_target]
       task = self.create_task_with_target_roots(
-        target_roots=[java_target]
+        target_roots=[java_target],
+        default_workflow='rsc-and-zinc',
       )
 
       jobs = task._create_compile_jobs(
@@ -111,7 +111,8 @@ class RscCompileTest(NailgunTaskTestBase):
       print(dependee_graph)
       self.assertEqual(dedent("""
                      zinc[zinc-java](java/classpath:java_lib) <- {}
-                     zinc[zinc-only](scala/classpath:scala_lib) <- {}""").strip(),
+                     rsc(scala/classpath:scala_lib) <- {}
+                     zinc[rsc-and-zinc](scala/classpath:scala_lib) <- {}""").strip(),
         dependee_graph)
 
   def test_default_workflow_of_zinc_only_zincs_scala(self):
