@@ -50,38 +50,8 @@ impl rule_graph::Rule for Rule {
 impl fmt::Display for Rule {
   fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
     match self {
-      &Rule::Task(ref task) => {
-        let product = format!("{}", task.product);
-        let mut clause_portion = task
-          .clause
-          .iter()
-          .map(|c| c.product.to_string())
-          .collect::<Vec<_>>()
-          .join(", ");
-        clause_portion = format!("[{}]", clause_portion);
-        let mut get_portion = task
-          .gets
-          .iter()
-          .map(::std::string::ToString::to_string)
-          .collect::<Vec<_>>()
-          .join(", ");
-        get_portion = if task.gets.is_empty() {
-          "".to_string()
-        } else {
-          format!("[{}], ", get_portion)
-        };
-
-        write!(
-          f,
-          "({}, {}, {}{})",
-          product, clause_portion, get_portion, task.func,
-        )
-      }
-      &Rule::Intrinsic(ref intrinsic) => write!(
-        f,
-        "({}, [{}], <intrinsic>)",
-        intrinsic.product, intrinsic.input,
-      ),
+      &Rule::Task(ref task) => write!(f, "(def {}(..) -> {})", task.func, task.product),
+      &Rule::Intrinsic(ref intrinsic) => write!(f, "({}, <intrinsic>)", intrinsic.product),
     }
   }
 }

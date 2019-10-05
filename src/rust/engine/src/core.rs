@@ -167,7 +167,7 @@ impl Function {
   fn pretty_print(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
     let Function(key) = self;
     let name = externs::project_str(&externs::val_for(&key), "__name__");
-    write!(f, "{}()", name)
+    write!(f, "{}", name)
   }
 }
 

@@ -1005,21 +1005,22 @@ impl<R: Rule> RuleGraph<R> {
     let mut root_rule_strs = self
       .rule_dependency_edges
       .iter()
-      .filter_map(|(k, deps)| match k {
+      .flat_map(|(k, deps)| match k {
         EntryWithDeps::Root(_) => {
           let root_str = entry_with_deps_str(k);
-          Some(format!(
-            "    \"{}\" [color=blue]\n    \"{}\" -> {{{}}}",
-            root_str,
-            root_str,
-            deps
-              .all_dependencies()
-              .map(|d| format!("\"{}\"", entry_str(d)))
-              .collect::<Vec<String>>()
-              .join(" ")
-          ))
+          let mut root_strs = Vec::new();
+          root_strs.push(format!("    \"{}\" [color=blue];", root_str));
+          for (key, entries) in &deps.dependencies {
+            root_strs.push(format!(
+              "    \"{}\" -> \"{}\" [ label=\"{}\" ];",
+              root_str,
+              entry_str(&entries[0]),
+              key
+            ));
+          }
+          root_strs
         }
-        _ => None,
+        _ => vec![],
       })
       .collect::<Vec<String>>();
     root_rule_strs.sort();
@@ -1029,20 +1030,22 @@ impl<R: Rule> RuleGraph<R> {
     let mut internal_rule_strs = self
       .rule_dependency_edges
       .iter()
-      .filter_map(|(k, deps)| match k {
+      .flat_map(|(k, deps)| match k {
         EntryWithDeps::Inner(_) => {
-          let mut deps_strs = deps
-            .all_dependencies()
-            .map(|d| format!("\"{}\"", entry_str(d)))
-            .collect::<Vec<String>>();
-          deps_strs.sort();
-          Some(format!(
-            "    \"{}\" -> {{{}}}",
-            entry_with_deps_str(k),
-            deps_strs.join(" ")
-          ))
+          let inner_str = entry_with_deps_str(k);
+          let mut inner_strs = Vec::new();
+          inner_strs.push(format!("    \"{}\";", inner_str));
+          for (key, entries) in &deps.dependencies {
+            inner_strs.push(format!(
+              "    \"{}\" -> \"{}\" [ label=\"{}\" ];",
+              inner_str,
+              entry_str(&entries[0]),
+              key
+            ));
+          }
+          inner_strs
         }
-        _ => None,
+        _ => vec![],
       })
       .collect::<Vec<String>>();
     internal_rule_strs.sort();
