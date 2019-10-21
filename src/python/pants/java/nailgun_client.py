@@ -26,7 +26,7 @@ class NailgunClientSession(NailgunProtocol, NailgunProtocol.TimeoutProvider):
   """Handles a single nailgun client session."""
 
   def __init__(self, sock, in_file, out_file, err_file, exit_on_broken_pipe=False,
-               remote_pid_callback=None, remote_pgrp_callback=None):
+               remote_pid=None):
     """
     :param bool exit_on_broken_pipe: whether or not to exit when `Broken Pipe` errors are
                 encountered
@@ -44,11 +44,7 @@ class NailgunClientSession(NailgunProtocol, NailgunProtocol.TimeoutProvider):
     self._stdout = out_file
     self._stderr = err_file
     self._exit_on_broken_pipe = exit_on_broken_pipe
-    self.remote_pid = None
-    self.remote_process_cmdline = None
-    self.remote_pgrp = None
-    self._remote_pid_callback = remote_pid_callback
-    self._remote_pgrp_callback = remote_pgrp_callback
+    self._remote_pid = 
     # NB: These variables are set in a signal handler to implement graceful shutdown.
     self._exit_timeout_start_time = None
     self._exit_timeout = None
@@ -116,8 +112,7 @@ class NailgunClientSession(NailgunProtocol, NailgunProtocol.TimeoutProvider):
         timeout_object=self,
       ):
         # TODO(#6579): assert that we have at this point received all the chunk types in
-        # ChunkType.REQUEST_TYPES, then require PID and PGRP (exactly once?), and then allow any of
-        # ChunkType.EXECUTION_TYPES.
+        # ChunkType.REQUEST_TYPES, and then allow any of ChunkType.EXECUTION_TYPES.
         if chunk_type == ChunkType.STDOUT:
           self._write_flush(self._stdout, payload)
         elif chunk_type == ChunkType.STDERR:
@@ -126,38 +121,25 @@ class NailgunClientSession(NailgunProtocol, NailgunProtocol.TimeoutProvider):
           self._write_flush(self._stdout)
           self._write_flush(self._stderr)
           return int(payload)
-        elif chunk_type == ChunkType.PID:
-          self.remote_pid = int(payload)
-          self.remote_process_cmdline = psutil.Process(self.remote_pid).cmdline()
-          if self._remote_pid_callback:
-            self._remote_pid_callback(self.remote_pid)
-        elif chunk_type == ChunkType.PGRP:
-          self.remote_pgrp = int(payload)
-          if self._remote_pgrp_callback:
-            self._remote_pgrp_callback(self.remote_pgrp)
         elif chunk_type == ChunkType.START_READING_INPUT:
           self._maybe_start_input_writer()
         else:
           raise self.ProtocolError('received unexpected chunk {} -> {}'.format(chunk_type, payload))
     except NailgunProtocol.ProcessStreamTimeout as e:
-      assert(self.remote_pid is not None)
-      # NB: We overwrite the process title in the pantsd process, which causes it to have an
-      # argv with lots of empty spaces for some reason. We filter those out and pretty-print the
-      # rest here.
-      filtered_remote_cmdline = safe_shlex_join(
-        arg for arg in self.remote_process_cmdline if arg != '')
+      action = 
+      if self._remote_port:
+
       logger.warning(
-        "timed out when attempting to gracefully shut down the remote client executing \"{}\". "
-        "sending SIGKILL to the remote client at pid: {}. message: {}"
-        .format(filtered_remote_cmdline, self.remote_pid, e))
+        "timed out when attempting to gracefully shut down the remote run. sending SIGKILL. "
+        "message: {}".format(e))
     finally:
       # Bad chunk types received from the server can throw NailgunProtocol.ProtocolError in
       # NailgunProtocol.iter_chunks(). This ensures the NailgunStreamWriter is always stopped.
       self._maybe_stop_input_writer()
       # If an asynchronous error was set at any point (such as in a signal handler), we want to make
       # sure we clean up the remote process before exiting with error.
-      if self._exit_reason:
-        if self.remote_pgrp:
+      if self._exit_reason and self._remote_pid:
+        if self._remote_port:
           safe_kill(self.remote_pgrp, signal.SIGKILL)
         if self.remote_pid:
           safe_kill(self.remote_pid, signal.SIGKILL)
@@ -250,34 +232,6 @@ class NailgunClient:
     self._metadata_base_dir = metadata_base_dir
     # Mutable session state.
     self._session = None
-    self._current_remote_pid = None
-    self._current_remote_pgrp = None
-
-  def _get_remote_pid_file_path(self, pid):
-    return os.path.join(
-      self._metadata_base_dir,
-      'nailgun-client',
-      str(pid))
-
-  # TODO(#6579): this should be done within a contextmanager for RAII!
-  def _maybe_write_pid_file(self):
-    if self._current_remote_pid and self._current_remote_pgrp:
-      remote_pid_file_path = self._get_remote_pid_file_path(os.getpid())
-      safe_file_dump(remote_pid_file_path, str(self._current_remote_pid))
-
-  def _receive_remote_pid(self, pid):
-    self._current_remote_pid = pid
-    self._maybe_write_pid_file()
-
-  def _receive_remote_pgrp(self, pgrp):
-    self._current_remote_pgrp = pgrp
-    self._maybe_write_pid_file()
-
-  def _maybe_last_pid(self):
-    return self._current_remote_pid
-
-  def _maybe_last_pgrp(self):
-    return self._current_remote_pgrp
 
   def try_connect(self):
     """Creates a socket, connects it to the nailgun and returns the connected socket.

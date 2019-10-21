@@ -85,7 +85,6 @@ class TestNailgunClientSession(unittest.TestCase):
     self.assertEqual(self.fake_stderr.content, self.TEST_PAYLOAD * 3)
     self.mock_stdin_reader.start.assert_called_once_with()
     self.mock_stdin_reader.stop.assert_called_once_with()
-    self.assertEqual(self.nailgun_client_session.remote_pid, 31337)
 
   @unittest.mock.patch('psutil.Process', **PATCH_OPTS)
   def test_process_session_bad_chunk(self, mock_psutil_process):
@@ -203,6 +202,5 @@ class TestNailgunClient(unittest.TestCase):
 
   @unittest.mock.patch('os.kill', **PATCH_OPTS)
   def test_send_control_c_noop_nopid(self, mock_kill):
-    self.nailgun_client._session = unittest.mock.Mock(remote_pid=None, remote_pgrp=None)
     self.nailgun_client.maybe_send_signal(signal.SIGINT)
     mock_kill.assert_not_called()
