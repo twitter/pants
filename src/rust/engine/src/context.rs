@@ -156,7 +156,6 @@ impl Core {
           process_execution_metadata.clone(),
           local_python_distribution_absolute_path,
           std::env::temp_dir(),
-          executor.clone(),
         ))
       } else {
         Box::new(local_command_runner)

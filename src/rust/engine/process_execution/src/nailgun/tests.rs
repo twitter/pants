@@ -1,5 +1,5 @@
 use crate::nailgun::{
-  CommandRunner, ARGS_TO_START_NAILGUN, NAILGUN_MAIN_CLASS, NAILGUN_PORT_ENV_VAR_FOR_CLIENT,
+  CommandRunner, NailgunPool, ARGS_TO_START_NAILGUN, NAILGUN_MAIN_CLASS, NAILGUN_PORT_ENV_VAR_FOR_CLIENT,
 };
 use crate::{ExecuteProcessRequest, ExecuteProcessRequestMetadata, Platform};
 use hashing::EMPTY_DIGEST;
@@ -29,7 +29,6 @@ fn mock_nailgun_runner(workdir_base: Option<PathBuf>) -> CommandRunner {
     metadata,
     python_distribution,
     workdir_base,
-    executor.clone(),
   )
 }
 
@@ -144,7 +143,7 @@ fn materialize_with_jdk(
   jdk_path: PathBuf,
 ) -> Result<(), String> {
   let executor = task_executor::Executor::new();
-  let materializer = CommandRunner::materialize_workdir_for_server(
+  let materializer = NailgunPool::materialize_workdir_for_server(
     runner.inner.store.clone(),
     dir,
     jdk_path,
