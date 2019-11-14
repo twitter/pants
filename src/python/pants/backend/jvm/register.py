@@ -55,6 +55,7 @@ from pants.backend.jvm.tasks.junit_run import JUnitRun
 from pants.backend.jvm.tasks.jvm_compile.javac.javac_compile import JavacCompile
 from pants.backend.jvm.tasks.jvm_compile.jvm_classpath_publisher import RuntimeClasspathPublisher
 from pants.backend.jvm.tasks.jvm_compile.rsc.rsc_compile import RscCompile
+from pants.backend.jvm.tasks.jvm_compile.zinc import zinc_compile
 from pants.backend.jvm.tasks.jvm_dependency_check import JvmDependencyCheck
 from pants.backend.jvm.tasks.jvm_dependency_usage import JvmDependencyUsage
 from pants.backend.jvm.tasks.jvm_platform_analysis import JvmPlatformExplain, JvmPlatformValidate
@@ -137,6 +138,10 @@ def build_file_aliases():
 
 def global_subsystems():
   return (ScalaPlatform, ScoveragePlatform, )
+
+
+def rules():
+  return zinc_compile.rules()
 
 
 # TODO https://github.com/pantsbuild/pants/issues/604 register_goals

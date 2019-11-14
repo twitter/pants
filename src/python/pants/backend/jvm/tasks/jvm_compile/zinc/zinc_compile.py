@@ -9,6 +9,7 @@ import textwrap
 import zipfile
 from collections import defaultdict
 from contextlib import closing
+from dataclasses import dataclass
 from xml.etree import ElementTree
 
 from pants.backend.jvm.subsystems.java import Java
@@ -24,13 +25,20 @@ from pants.base.build_environment import get_buildroot
 from pants.base.exceptions import TaskError
 from pants.base.hash_utils import hash_file
 from pants.base.workunit import WorkUnitLabel
+from pants.build_graph.address import Address
+from pants.engine.console import Console
 from pants.engine.fs import (
   EMPTY_DIRECTORY_DIGEST,
+  Digest,
   DirectoryToMaterialize,
   PathGlobs,
   PathGlobsAndRoot,
 )
-from pants.engine.isolated_process import ExecuteProcessRequest
+from pants.engine.goal import Goal
+from pants.engine.isolated_process import ExecuteProcessRequest, ExecuteProcessResult
+from pants.engine.legacy.graph import HydratedTarget, HydratedTargets
+from pants.engine.rules import console_rule, optionable_rule, rule
+from pants.engine.selectors import Get
 from pants.util.contextutil import open_zip
 from pants.util.dirutil import fast_relpath
 from pants.util.memo import memoized_method, memoized_property
@@ -43,6 +51,70 @@ _SCALAC_PLUGIN_INFO_FILE = 'scalac-plugin.xml'
 
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class Classpath:
+  digest: Digest
+
+
+@dataclass(frozen=True)
+class JavaTarget:
+  address: Address
+
+
+@rule
+def compile_java(java_target: JavaTarget, zinc_factory: Zinc.Factory) -> Classpath:
+  zinc = zinc_factory.create(None, None)
+
+  hydrated_target = yield Get(HydratedTarget, Address, java_target.address)
+  sources_snapshot = hydrated_target.adaptor.sources.snapshot
+
+  output_files = tuple(
+    # Assume no extra .class files to grab. We'll fix up that case soon.
+    # Drop the source_root from the file path.
+    # Assumes `-d .` has been put in the command.
+    f.replace('.java', '.class') for f in sources_snapshot.files if f.endswith('.java')
+  )
+
+  argv = tuple([
+      '.jdk/bin/java',
+      '-cp', '.jdk/lib/tools.jar',
+      'com.sun.tools.javac.Main',
+      *sources_snapshot.files,
+    ])
+
+  result = yield Get(ExecuteProcessResult, ExecuteProcessRequest(
+    argv=argv,
+    input_files=sources_snapshot.directory_digest,
+    output_files=output_files,
+    description='Compiling {} with javac'.format(hydrated_target.address.spec),
+    is_nailgunnable=True,
+    jdk_home=zinc.underlying_dist.home,
+  ))
+  yield Classpath(digest=result.output_directory_digest)
+
+
+class Compile(Goal):
+  name = 'compile-v2'
+
+
+@console_rule
+def compile(console: Console, targets: HydratedTargets) -> Compile:
+  # Filter to compilable things and request classpaths.
+  # TODO: There should not be a need to expand sources to decide what is compilable, but we do it
+  # here by requesting HydratedTarget because we don't have useful JVM TargetAdaptors. See #4535.
+  java_targets = [
+      t for t in targets
+      if hasattr(t.adaptor, 'sources') and any(f.endswith('.java') for f in t.adaptor.sources.snapshot.files)
+    ]
+
+  classpaths = yield [Get(Classpath, JavaTarget(t.address)) for t in java_targets]
+
+  for target, classpath in zip(java_targets, classpaths):
+    console.print_stdout(f'Compiled {target.address.spec} to {classpath.digest}')
+
+  yield Compile(exit_code=0)
 
 
 class BaseZincCompile(JvmCompile):
@@ -727,3 +799,11 @@ class ZincCompile(BaseZincCompile):
 
   def select_source(self, source_file_path):
     return source_file_path.endswith('.java') or source_file_path.endswith('.scala')
+
+
+def rules():
+  return [
+      compile,
+      compile_java,
+      optionable_rule(Zinc.Factory),
+    ]
