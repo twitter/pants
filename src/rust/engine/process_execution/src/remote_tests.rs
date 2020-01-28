@@ -786,7 +786,7 @@ pub fn sends_headers() {
     workunit_store: WorkUnitStore::default(),
     build_id: String::from("marmosets"),
   };
-  tokio::runtime::Runtime::new()
+  tokio_compat::runtime::Runtime::new()
     .unwrap()
     .block_on(command_runner.run(execute_request, context))
     .expect("Execution failed");
@@ -1139,7 +1139,7 @@ fn dropped_request_cancels() {
     Duration::from_millis(0),
     Duration::from_secs(0),
   );
-  let mut runtime = tokio::runtime::Runtime::new().unwrap();
+  let mut runtime = tokio_compat::runtime::Runtime::new().unwrap();
 
   let successful_mock_result = FallibleExecuteProcessResult {
     stdout: as_bytes("foo-fast"),
@@ -1916,7 +1916,7 @@ fn wait_between_request_1_retry() {
       Duration::from_millis(100),
       Duration::from_secs(1),
     );
-    let mut runtime = tokio::runtime::Runtime::new().unwrap();
+    let mut runtime = tokio_compat::runtime::Runtime::new().unwrap();
     runtime
       .block_on(command_runner.run(execute_request, Context::default()))
       .unwrap();
@@ -1972,7 +1972,7 @@ fn wait_between_request_3_retry() {
       Duration::from_millis(50),
       Duration::from_secs(5),
     );
-    let mut runtime = tokio::runtime::Runtime::new().unwrap();
+    let mut runtime = tokio_compat::runtime::Runtime::new().unwrap();
     runtime
       .block_on(command_runner.run(execute_request, Context::default()))
       .unwrap();
@@ -2215,7 +2215,7 @@ fn remote_workunits_are_stored() {
     std::time::Duration::from_secs(0),
   );
 
-  let mut runtime = tokio::runtime::Runtime::new().unwrap();
+  let mut runtime = tokio_compat::runtime::Runtime::new().unwrap();
 
   let workunit_store_2 = workunit_store.clone();
   runtime
@@ -2472,7 +2472,7 @@ fn run_command_remote(
     Duration::from_millis(0),
     Duration::from_secs(0),
   );
-  let mut runtime = tokio::runtime::Runtime::new().unwrap();
+  let mut runtime = tokio_compat::runtime::Runtime::new().unwrap();
   runtime.block_on(command_runner.run(request, Context::default()))
 }
 
@@ -2533,7 +2533,7 @@ fn extract_execute_response(
     Duration::from_secs(0),
   );
 
-  let mut runtime = tokio::runtime::Runtime::new().unwrap();
+  let mut runtime = tokio_compat::runtime::Runtime::new().unwrap();
 
   runtime.block_on(command_runner.extract_execute_response(
     OperationOrStatus::Operation(operation),

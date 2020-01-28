@@ -28,7 +28,7 @@
 
 use futures01::{future, Future};
 use std::sync::Arc;
-use tokio::runtime::Runtime;
+use tokio_compat::runtime::Runtime;
 
 // TODO: It's strange that this is an exposed interface from the logging crate, rather than an
 // implementation of a trait that lives elsewhere. This can't currently be a trait because its

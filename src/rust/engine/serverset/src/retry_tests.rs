@@ -5,7 +5,7 @@ use testutil::owned_string_vec;
 
 #[test]
 fn retries() {
-  let mut runtime = tokio::runtime::Runtime::new().unwrap();
+  let mut runtime = tokio_compat::runtime::Runtime::new().unwrap();
   let s = Serverset::new(
     owned_string_vec(&["good", "bad", "enough"]),
     |s| {
@@ -32,7 +32,7 @@ fn retries() {
 
 #[test]
 fn gives_up_on_enough_bad() {
-  let mut runtime = tokio::runtime::Runtime::new().unwrap();
+  let mut runtime = tokio_compat::runtime::Runtime::new().unwrap();
   let s = Serverset::new(
     vec!["bad".to_owned()],
     |s| Err(s.to_owned()),

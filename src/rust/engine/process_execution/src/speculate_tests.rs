@@ -108,7 +108,7 @@ fn run_speculation_test(
   Arc<Mutex<u32>>,
   Arc<Mutex<u32>>,
 ) {
-  let runtime = tokio::runtime::Runtime::new().unwrap();
+  let runtime = tokio_compat::runtime::Runtime::new().unwrap();
   let execute_request = echo_foo_request();
   let msg1: String = "m1".into();
   let msg2: String = "m2".into();

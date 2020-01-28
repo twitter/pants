@@ -1213,7 +1213,7 @@ pub fn block_on<
 >(
   f: Fut,
 ) -> Result<Item, Error> {
-  let mut runtime = tokio::runtime::Runtime::new().unwrap();
+  let mut runtime = tokio_compat::runtime::Runtime::new().unwrap();
   runtime.block_on(f)
 }
 
@@ -1326,7 +1326,7 @@ fn materialize_directory_metadata_all_local() {
   let inner_dir = TestDirectory::containing_roland();
   let file = TestData::roland();
 
-  let mut runtime = tokio::runtime::Runtime::new().unwrap();
+  let mut runtime = tokio_compat::runtime::Runtime::new().unwrap();
 
   let dir = tempfile::tempdir().unwrap();
   let store = new_local_store(dir.path());
@@ -1385,7 +1385,7 @@ fn materialize_directory_metadata_mixed() {
   let file = TestData::roland();
 
   let cas = StubCAS::builder().directory(&nested_dir).build();
-  let mut runtime = tokio::runtime::Runtime::new().unwrap();
+  let mut runtime = tokio_compat::runtime::Runtime::new().unwrap();
 
   let dir = tempfile::tempdir().unwrap();
   let store = new_store(dir.path(), cas.address());
@@ -1445,7 +1445,7 @@ fn explicitly_overwrites_already_existing_file() {
     TestDirectory { directory }
   }
 
-  let mut runtime = tokio::runtime::Runtime::new().unwrap();
+  let mut runtime = tokio_compat::runtime::Runtime::new().unwrap();
   let dir_to_write_to = tempfile::tempdir().unwrap();
   let file_path: PathBuf = [dir_to_write_to.path(), Path::new("some_filename")]
     .iter()

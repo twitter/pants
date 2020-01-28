@@ -15,3 +15,4 @@ tokio-timer = "0.2"
 maplit = "1"
 testutil = { path = "../testutil" }
 tokio = "0.1"
+tokio-compat = "0.1"

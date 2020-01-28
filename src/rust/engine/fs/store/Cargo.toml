@@ -37,4 +37,5 @@ maplit = "*"
 mock = { path = "../../testutil/mock" }
 testutil = { path = "../../testutil" }
 tokio = "0.1"
+tokio-compat = "0.1"
 walkdir = "2"

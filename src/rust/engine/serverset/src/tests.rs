@@ -20,7 +20,7 @@ fn no_servers_is_error() {
 
 #[test]
 fn one_request_works() {
-  let mut rt = tokio::runtime::Runtime::new().unwrap();
+  let mut rt = tokio_compat::runtime::Runtime::new().unwrap();
   let s = Serverset::new(
     owned_string_vec(&["good"]),
     fake_connect,
@@ -34,7 +34,7 @@ fn one_request_works() {
 
 #[test]
 fn round_robins() {
-  let mut rt = tokio::runtime::Runtime::new().unwrap();
+  let mut rt = tokio_compat::runtime::Runtime::new().unwrap();
   let s = Serverset::new(
     owned_string_vec(&["good", "bad"]),
     fake_connect,
@@ -48,7 +48,7 @@ fn round_robins() {
 
 #[test]
 fn handles_overflow_internally() {
-  let mut rt = tokio::runtime::Runtime::new().unwrap();
+  let mut rt = tokio_compat::runtime::Runtime::new().unwrap();
   let s = Serverset::new(
     owned_string_vec(&["good", "bad"]),
     fake_connect,
@@ -71,7 +71,7 @@ fn unwrap<T: std::fmt::Debug>(wrapped: Arc<Mutex<T>>) -> T {
 
 #[test]
 fn skips_unhealthy() {
-  let mut rt = tokio::runtime::Runtime::new().unwrap();
+  let mut rt = tokio_compat::runtime::Runtime::new().unwrap();
   let s = Serverset::new(
     owned_string_vec(&["good", "bad"]),
     fake_connect,
@@ -87,7 +87,7 @@ fn skips_unhealthy() {
 
 #[test]
 fn reattempts_unhealthy() {
-  let mut rt = tokio::runtime::Runtime::new().unwrap();
+  let mut rt = tokio_compat::runtime::Runtime::new().unwrap();
   let s = Serverset::new(
     owned_string_vec(&["good", "bad"]),
     fake_connect,
@@ -105,7 +105,7 @@ fn reattempts_unhealthy() {
 
 #[test]
 fn backoff_when_unhealthy() {
-  let mut rt = tokio::runtime::Runtime::new().unwrap();
+  let mut rt = tokio_compat::runtime::Runtime::new().unwrap();
   let s = Serverset::new(
     owned_string_vec(&["good", "bad"]),
     fake_connect,
@@ -141,7 +141,7 @@ fn waits_if_all_unhealthy() {
     backoff_config,
   )
   .unwrap();
-  let mut runtime = tokio::runtime::Runtime::new().unwrap();
+  let mut runtime = tokio_compat::runtime::Runtime::new().unwrap();
 
   // We will get an address 4 times, and mark it as unhealthy each of those times.
   // That means that each server will be marked bad twice, which according to our backoff config
@@ -168,7 +168,11 @@ fn waits_if_all_unhealthy() {
   );
 }
 
-fn expect_both(runtime: &mut tokio::runtime::Runtime, s: &Serverset<String>, repetitions: usize) {
+fn expect_both(
+  runtime: &mut tokio_compat::runtime::Runtime,
+  s: &Serverset<String>,
+  repetitions: usize,
+) {
   let visited = Arc::new(Mutex::new(HashSet::new()));
 
   runtime
@@ -191,7 +195,11 @@ fn expect_both(runtime: &mut tokio::runtime::Runtime, s: &Serverset<String>, rep
   assert_eq!(unwrap(visited), expect);
 }
 
-fn mark_bad_as_bad(runtime: &mut tokio::runtime::Runtime, s: &Serverset<String>, health: Health) {
+fn mark_bad_as_bad(
+  runtime: &mut tokio_compat::runtime::Runtime,
+  s: &Serverset<String>,
+  health: Health,
+) {
   let mark_bad_as_baded_bad = Arc::new(Mutex::new(false));
   for _ in 0..2 {
     let s = s.clone();
@@ -211,7 +219,7 @@ fn mark_bad_as_bad(runtime: &mut tokio::runtime::Runtime, s: &Serverset<String>,
 }
 
 fn expect_only_good(
-  runtime: &mut tokio::runtime::Runtime,
+  runtime: &mut tokio_compat::runtime::Runtime,
   s: &Serverset<String>,
   duration: Duration,
 ) {
