@@ -1,11 +1,12 @@
 # Copyright 2018 Pants project contributors (see CONTRIBUTORS.md).
 # Licensed under the Apache License, Version 2.0 (see LICENSE).
 
-import logging
+from abc import ABC
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import PurePath
 from typing import Optional
+import logging
 
 from pants.base.exiter import PANTS_FAILED_EXIT_CODE, PANTS_SUCCEEDED_EXIT_CODE
 from pants.build_graph.address import Address, BuildFileAddress
@@ -36,9 +37,7 @@ class TestResult:
   status: Status
   stdout: str
   stderr: str
-  # TODO: We need a more generic way to handle coverage output across languages.
-  # See #8915 for proposed improvements.
-  _python_sqlite_coverage_file: Optional[Digest] = None
+  coverage_report: Optional[CoverageReport] = None
 
   # Prevent this class from being detected by pytest as a test class.
   __test__ = False
@@ -144,6 +143,23 @@ class PytestCoverageReport:
   directory_to_materialize_to: PurePath
 
 
+class CoverageReport(ABC):
+  @classproperty
+  def batch_type(cls) -> Type[CoverageReportBatch]:
+    pass
+
+
+@union
+@dataclass(frozen=True)
+class CoverageReportBatch:
+  reports: Tuple[CoverageReport, ..]
+
+
+# union_rule(CoverageReportBatch, PytestCoverageReportBatch)
+class PytestCoverageReportBatch(CoverageReportBatch):
+  pass
+
+
 @goal_rule
 async def run_tests(
   console: Console,
@@ -162,12 +178,23 @@ async def run_tests(
   did_any_fail = False
   filtered_address_and_test_results = tuple(x for x in results if x.test_result is not None)
   if options.values.run_coverage:
-    # TODO(#8915) Make a generic interface for collecting coverage reports. This class shouldn't have to know about
-    # PytestCoverageReport and JunitCoverageReport etc. It should only know about CoverageReport.
-    pytest_coverage_report = await Get[PytestCoverageReport](
-      AddressAndTestResults,
-      AddressAndTestResults(filtered_address_and_test_results)
-    )
+    # Group reports by type.
+    coverage_reports_by_type = defaultdict(list)
+    for x in filtered_address_and_test_results:
+      report = x.test_result.coverage_report 
+      if report is not None:
+        coverage_reports_by_type[type(report)].append(report)
+    # And then construct batches for each type.
+    batches = tuple(coverage_type.batch_type(reports)
+                    for coverage_type, reports in coverage_reports_by_type.items())
+
+    pytest_coverage_report = await MutiGet(
+        Get[CoverageReport](
+          CoverageReportBatch,
+          batch,
+        ) for batch in batches
+      )
+
     workspace.materialize_directory(DirectoryToMaterialize(
       pytest_coverage_report.report_directory_digest,
       path_prefix=str(pytest_coverage_report.directory_to_materialize_to)

@@ -169,6 +169,7 @@ async def setup_coverage(
 class MergedCoverageData:
   coverage_data: Digest
 
+`
 @rule(name="Merge coverage reports")
 async def merge_coverage_reports(
   test_results: AddressAndTestResults,
