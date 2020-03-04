@@ -387,6 +387,10 @@ class HydratedTargets(Collection[HydratedTarget]):
   """An intransitive set of HydratedTarget objects."""
 
 
+class HydratedStructs(Collection[HydratedStruct]):
+  """An intransitive set of HydratedStruct objects."""
+
+
 @dataclass(frozen=True)
 class TransitiveHydratedTarget:
   """A recursive structure wrapping a HydratedTarget root and TransitiveHydratedTarget deps."""
@@ -399,6 +403,20 @@ class TransitiveHydratedTargets:
   """A set of HydratedTarget roots, and their transitive, flattened, de-duped closure."""
   roots: Tuple[HydratedTarget, ...]
   closure: OrderedSet  # TODO: this is an OrderedSet[HydratedTarget]
+
+
+@dataclass(frozen=True)
+class TransitiveHydratedStruct:
+  """A recursive structure wrapping a HydratedStruct root and TransitiveHydratedStruct deps."""
+  root: HydratedStruct
+  dependencies: Tuple["TransitiveHydratedStruct", ...]
+
+
+@dataclass(frozen=True)
+class TransitiveHydratedStructs:
+  """A set of HydratedStruct roots, and their transitive, flattened, de-duped closure."""
+  roots: Tuple[HydratedStruct, ...]
+  closure: OrderedSet  # TODO: this is an OrderedSet[HydratedStruct]
 
 
 @dataclass(frozen=True)
@@ -505,6 +523,44 @@ async def find_owners(owners_request: OwnersRequest) -> Owners:
 
 
 @rule
+async def transitive_hydrated_structs(
+  build_file_addresses: BuildFileAddresses
+) -> TransitiveHydratedStructs:
+  """Given BuildFileAddresses, kicks off recursion on expansion of TransitiveHydratedStructs.
+
+  The TransitiveHydratedStruct struct represents a structure-shared graph, which we walk
+  and flatten here. The engine memoizes the computation of TransitiveHydratedStruct, so
+  when multiple TransitiveHydratedStructs objects are being constructed for multiple
+  roots, their structure will be shared.
+  """
+
+  transitive_hydrated_structs = await MultiGet(
+    Get[TransitiveHydratedStruct](Address, a) for a in build_file_addresses.addresses
+  )
+
+  closure = OrderedSet()
+  to_visit = deque(transitive_hydrated_structs)
+
+  while to_visit:
+    tht = to_visit.popleft()
+    if tht.root in closure:
+      continue
+    closure.add(tht.root)
+    to_visit.extend(tht.dependencies)
+
+  return TransitiveHydratedStructs(tuple(tht.root for tht in transitive_hydrated_structs), closure)
+
+
+@rule
+async def transitive_hydrated_struct(root: HydratedStruct) -> TransitiveHydratedStruct:
+  dependencies = await MultiGet(
+    Get[TransitiveHydratedStruct](Address, d)
+    for d in (root.value.kwargs().get('dependencies') or ())
+  )
+  return TransitiveHydratedStruct(root, dependencies)
+
+
+@rule
 async def transitive_hydrated_targets(
   build_file_addresses: BuildFileAddresses
 ) -> TransitiveHydratedTargets:
@@ -565,6 +621,12 @@ def topo_sort(targets: Iterable[HydratedTarget]) -> Tuple[HydratedTarget, ...]:
   input_set = set(targets)
   return tuple(tgt for tgt in res if tgt in input_set)
 
+
+@rule
+async def hydrated_structs(build_file_addresses: BuildFileAddresses) -> HydratedStructs:
+  """Requests HydratedStruct instances for BuildFileAddresses."""
+  structs = await MultiGet(Get[HydratedStruct](Address, a) for a in build_file_addresses.addresses)
+  return HydratedStructs(structs)
 
 
 @rule
@@ -772,6 +834,9 @@ def create_legacy_graph_tasks():
     transitive_hydrated_targets,
     transitive_hydrated_target,
     hydrated_targets,
+    transitive_hydrated_structs,
+    transitive_hydrated_struct,
+    hydrated_structs,
     hydrate_target,
     find_owners,
     hydrate_sources,

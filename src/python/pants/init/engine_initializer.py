@@ -2,6 +2,7 @@
 # Licensed under the Apache License, Version 2.0 (see LICENSE).
 
 import logging
+import time
 from dataclasses import dataclass
 from typing import Any, Iterable, Optional, Tuple, cast
 
@@ -235,7 +236,9 @@ class LegacyGraphSession:
       )
       logger.debug(f'requesting {goal_product} to satisfy execution of `{goal}` goal')
       try:
+        start = time.time()
         exit_code = self.scheduler_session.run_goal_rule(goal_product, params)
+        logger.warn(f'goal {goal} completed in {time.time() - start}')
       finally:
         console.flush()
 

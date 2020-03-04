@@ -7,7 +7,7 @@ from typing import Set
 from pants.engine.addressable import BuildFileAddresses
 from pants.engine.console import Console
 from pants.engine.goal import Goal, GoalSubsystem, LineOriented
-from pants.engine.legacy.graph import HydratedTargets, TransitiveHydratedTargets
+from pants.engine.legacy.graph import HydratedStructs, TransitiveHydratedStructs
 from pants.engine.rules import goal_rule
 from pants.engine.selectors import Get
 
@@ -49,17 +49,17 @@ async def dependencies(
 ) -> Dependencies:
   addresses: Set[str] = set()
   if options.values.transitive:
-    transitive_targets = await Get[TransitiveHydratedTargets](
+    transitive_structs = await Get[TransitiveHydratedStructs](
       BuildFileAddresses, build_file_addresses,
     )
-    transitive_dependencies = transitive_targets.closure - set(transitive_targets.roots)
-    addresses.update(hydrated_target.address.spec for hydrated_target in transitive_dependencies)
+    transitive_dependencies = transitive_structs.closure - set(transitive_structs.roots)
+    addresses.update(hydrated_struct.value.address.spec for hydrated_struct in transitive_dependencies)
   else:
-    hydrated_targets = await Get[HydratedTargets](BuildFileAddresses, build_file_addresses)
+    hydrated_structs = await Get[HydratedStructs](BuildFileAddresses, build_file_addresses)
     addresses.update(
       dep.spec
-      for hydrated_target in hydrated_targets
-      for dep in hydrated_target.dependencies
+      for hydrated_struct in hydrated_structs
+      for dep in (hydrated_struct.value.kwargs().get('dependencies') or ())
     )
 
   with options.line_oriented(console) as print_stdout:
